@@ -36,6 +36,7 @@ class LiveService extends ChangeNotifier {
   void Function(String alarmId)? onAllClear;
 
   StreamSubscription<Position>? _posSub;
+  int transitions = 0; // bumps on every boundary crossing (the area log listens)
   bool _started = false;
 
   String get uid => sb.auth.currentUser!.id;
@@ -129,6 +130,15 @@ class LiveService extends ChangeNotifier {
               final c = p.newRecord;
               if (c['status'] != 'ringing') Notify.cancelCall(c['id']);
             })));
+    _channels.add(_watch(sb.channel('me-$uid').onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'profiles',
+        filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'id', value: uid),
+        callback: (p) {
+          me = {...?me, ...Map<String, dynamic>.from(p.newRecord)};
+          notifyListeners();
+        })));
     _channels.add(_watch(sb.channel('areas-$uid')
         .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'sectors', callback: (_) => _reloadAreas())
         .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'zones', callback: (_) => _reloadAreas())
@@ -365,7 +375,17 @@ class LiveService extends ChangeNotifier {
     try {
       await sb.from('geofence_events').insert({'user_id': uid, 'area_type': type, 'area_id': id, 'event': ev});
     } catch (_) {}
+    transitions++;
+    notifyListeners();
   }
+
+  /// Name of a sector / zone / building for the area log.
+  String? areaName(String type, String? id) => switch (type) {
+        'sector' => areas.sector(id)?['name'],
+        'zone' => areas.zone(id)?['name'],
+        'building' => areas.building(id)?['name'],
+        _ => null,
+      };
 
   Future<void> _pushPosition() async {
     try {

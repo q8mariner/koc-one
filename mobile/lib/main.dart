@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'screens/alarm.dart';
 import 'screens/call.dart';
-import 'screens/home.dart';
+import 'screens/shell.dart';
 import 'screens/login.dart';
 import 'services/live.dart';
 import 'services/notify.dart';
@@ -106,7 +106,7 @@ class _AuthGateState extends State<AuthGate> {
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snap) {
         final session = Supabase.instance.client.auth.currentSession;
-        return session == null ? const LoginScreen() : const HomeScreen();
+        return session == null ? const LoginScreen() : const MainShell();
       },
     );
   }

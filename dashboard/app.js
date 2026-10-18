@@ -60,7 +60,7 @@ createApp({
       af: { kind: "signal2", scope: "building", target_id: "", title: KINDS.signal2.title.ar, title_en: KINDS.signal2.title.en, body: KINDS.signal2.body.ar, body_en: KINDS.signal2.body.en, drill: false, second: "", confirm: false },
       selAlarm: null,
       // people
-      pf: null,
+      pf: null, pe: null, avatars: {}, verifyCode: "", verifyResult: null,
       // reports
       privKey: null, pass: "", keyRow: null, hasKey: false, opened: {}, newPass: "", newPass2: "",
       // calls
@@ -120,6 +120,7 @@ createApp({
       s.alarms = e.data || []; s.acks = f.data || []; s.reports = g.data || [];
       s.keyRow = k.data; s.hasKey = !!k.data;
       if (!s.selAlarm) { const act = s.alarms.find((x) => x.active); if (act) s.selAlarm = act.id; }
+      loadAvatars();
     }
 
     function upsertLocal(arr, row, key = (r) => r.id) { const i = arr.findIndex((x) => key(x) === key(row)); if (i >= 0) arr[i] = row; else arr.unshift(row); }
@@ -278,6 +279,52 @@ createApp({
       if (error || data?.error) return toast(tr("تعذّر الإنشاء: ", "Couldn’t create: ") + (data?.error || error.message));
       s.pf = null; toast(tr("أُنشئ الحساب — سلّم الموظف بيانات الدخول للتطبيق", "Account created — give the employee their sign-in details")); await loadAll();
     }
+    async function loadAvatars() {
+      const paths = s.people.filter((p) => p.photo_path).map((p) => p.photo_path);
+      if (!paths.length) return;
+      const { data } = await sb.storage.from("avatars").createSignedUrls(paths, 3600);
+      const map = {};
+      (data || []).forEach((d, i) => { if (d.signedUrl) map[paths[i]] = d.signedUrl; });
+      s.avatars = map;
+    }
+    const avatar = (p) => (p && p.photo_path ? s.avatars[p.photo_path] : null);
+    function editPerson(p) {
+      s.pe = { id: p.id, full_name: p.full_name || "", employee_no: p.employee_no || "", job_title: p.job_title || "", department: p.department || "",
+        phone: p.phone || "", blood_type: p.blood_type || "O+", civil_id: p.civil_id || "", active: p.active !== false, role: p.role,
+        photo_path: p.photo_path, file: null, preview: avatar(p) };
+    }
+    // Resize to max 640px JPEG before upload (official ID photo)
+    function pickPhoto(ev) {
+      const f = ev.target.files && ev.target.files[0]; if (!f) return;
+      const img = new Image(), url = URL.createObjectURL(f);
+      img.onload = () => {
+        const k = Math.min(1, 640 / Math.max(img.width, img.height));
+        const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob((b) => { s.pe.file = b; s.pe.preview = URL.createObjectURL(b); }, "image/jpeg", 0.88);
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+    async function savePersonEdit() {
+      const e = s.pe; if (!e.full_name.trim()) return toast(tr("الاسم مطلوب", "Name is required"));
+      let photo_path = e.photo_path;
+      if (e.file) {
+        photo_path = `${e.id}/photo.jpg`;
+        const up = await sb.storage.from("avatars").upload(photo_path, e.file, { upsert: true, contentType: "image/jpeg" });
+        if (up.error) return toast(tr("تعذّر رفع الصورة: ", "Photo upload failed: ") + up.error.message);
+      }
+      const row = { full_name: e.full_name.trim(), employee_no: e.employee_no || null, job_title: e.job_title || null, department: e.department || null,
+        phone: e.phone || null, blood_type: e.blood_type || null, civil_id: e.civil_id || null, active: e.active, role: e.role, photo_path };
+      const { error } = await sb.from("profiles").update(row).eq("id", e.id);
+      if (error) return toast(tr("خطأ: ", "Error: ") + error.message);
+      s.pe = null; toast(tr("حُفظت بيانات الهوية", "ID details saved")); await loadAll();
+    }
+    async function verifyId() {
+      s.verifyResult = null; const code = s.verifyCode.trim(); if (!code) return;
+      const { data, error } = await sb.functions.invoke("id-token", { body: { verify: code } });
+      s.verifyResult = error ? { valid: false } : data;
+    }
     async function updatePerson(p, field, value) { const { error } = await sb.from("profiles").update({ [field]: value }).eq("id", p.id); if (error) toast(error.message); }
 
     // ───── Calls ─────
@@ -345,7 +392,7 @@ createApp({
       setInterval(() => { s._tick = Date.now(); }, 30000);
     });
 
-    return { s, NAV, ITEM_TYPES, KINDS, tr, L, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
+    return { s, avatar, editPerson, pickPhoto, savePersonEdit, verifyId, NAV, ITEM_TYPES, KINDS, tr, L, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
       newItem, editItem, startDraw, cancelDraw, parseCoords, useMyGps, saveItem, deleteItem, focus, fitAll,
       targets, setKind, reach, launch, closeAlarm, alarmRoster, counts, selAlarmObj, activeAlarms,
       newPerson, savePerson, updatePerson, callPerson, hangup, toggleMute,

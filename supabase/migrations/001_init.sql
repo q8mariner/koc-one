@@ -257,3 +257,31 @@ alter publication supabase_realtime add table public.sectors, public.zones, publ
 
 -- English alarm text (the app shows the employee's chosen language)
 alter table public.alarms add column if not exists title_en text, add column if not exists body_en text;
+
+-- ───────── Digital ID (managed by ORT; photo uploaded from the dashboard only) ─────────
+alter table public.profiles
+  add column if not exists job_title text,
+  add column if not exists department text,
+  add column if not exists civil_id text,
+  add column if not exists photo_path text,
+  add column if not exists active boolean not null default true;
+
+create or replace function public.protect_role() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null and not public.is_ort() then
+    new.role := old.role; new.full_name := old.full_name; new.employee_no := old.employee_no;
+    new.blood_type := old.blood_type; new.phone := old.phone; new.job_title := old.job_title;
+    new.department := old.department; new.civil_id := old.civil_id; new.photo_path := old.photo_path;
+    new.active := old.active;
+  end if;
+  return new;
+end $$;
+revoke execute on function public.protect_role() from public, anon, authenticated;
+
+insert into storage.buckets (id, name, public) values ('avatars', 'avatars', false) on conflict (id) do nothing;
+create policy "ort uploads photos" on storage.objects for insert to authenticated with check (bucket_id = 'avatars' and public.is_ort());
+create policy "ort updates photos" on storage.objects for update to authenticated using (bucket_id = 'avatars' and public.is_ort()) with check (bucket_id = 'avatars' and public.is_ort());
+create policy "ort deletes photos" on storage.objects for delete to authenticated using (bucket_id = 'avatars' and public.is_ort());
+create policy "own or ort reads photo" on storage.objects for select to authenticated
+  using (bucket_id = 'avatars' and (public.is_ort() or (storage.foldername(name))[1] = auth.uid()::text));

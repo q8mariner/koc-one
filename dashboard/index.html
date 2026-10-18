@@ -207,16 +207,51 @@
             <div><label for="pfr">{{ tr('الدور', 'Role') }}</label><select id="pfr" v-model="s.pf.role"><option value="employee">{{ tr('موظف', 'Employee') }}</option><option value="ort">{{ tr('عضو ORT', 'ORT member') }}</option></select></div>
             <div class="row gap8 end span2"><button type="button" class="btn sm ghost" @click="s.pf=null">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary">{{ tr('إنشاء الحساب', 'Create account') }}</button></div>
           </form>
+          <!-- ID editor (photo is uploaded here only) -->
+          <div v-if="s.pe" class="editor id-editor">
+            <h3>{{ tr('بيانات الهوية الرقمية', 'Digital ID details') }}</h3>
+            <div class="id-edit">
+              <div class="photo-box">
+                <div class="photo" :style="s.pe.preview ? {backgroundImage: 'url(' + s.pe.preview + ')'} : {}"><svg v-if="!s.pe.preview" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0"/></svg></div>
+                <label class="btn sm upload">{{ tr('رفع الصورة الرسمية', 'Upload official photo') }}<input type="file" accept="image/*" @change="pickPhoto" hidden></label>
+                <small class="muted">{{ tr('تظهر في هوية الموظف فقط · لا يستطيع الموظف تغييرها', 'Shown on the employee’s ID only · the employee can’t change it') }}</small>
+              </div>
+              <div class="grid3 grow">
+                <div><label for="pen">{{ tr('الاسم الكامل', 'Full name') }}</label><input id="pen" v-model="s.pe.full_name"></div>
+                <div><label for="peno">{{ tr('الرقم الوظيفي', 'Employee no.') }}</label><input id="peno" v-model="s.pe.employee_no"></div>
+                <div><label for="pej">{{ tr('المسمى الوظيفي', 'Job title') }}</label><input id="pej" v-model="s.pe.job_title"></div>
+                <div><label for="ped">{{ tr('المجموعة / الإدارة', 'Group / department') }}</label><input id="ped" v-model="s.pe.department"></div>
+                <div><label for="pep">{{ tr('الهاتف', 'Phone') }}</label><input id="pep" v-model="s.pe.phone" dir="ltr"></div>
+                <div><label for="peb">{{ tr('فصيلة الدم', 'Blood type') }}</label><select id="peb" v-model="s.pe.blood_type"><option v-for="b in ['O+','O-','A+','A-','B+','B-','AB+','AB-']" :key="b">{{ b }}</option></select></div>
+                <div><label for="pec">{{ tr('الرقم المدني', 'Civil ID') }}</label><input id="pec" v-model="s.pe.civil_id" dir="ltr"></div>
+                <div><label for="per">{{ tr('الدور', 'Role') }}</label><select id="per" v-model="s.pe.role"><option value="employee">{{ tr('موظف', 'Employee') }}</option><option value="ort">{{ tr('عضو ORT', 'ORT member') }}</option></select></div>
+                <div><label class="check"><input type="checkbox" v-model="s.pe.active"> {{ tr('موظف فعّال', 'Active employee') }}</label></div>
+              </div>
+            </div>
+            <div class="row gap8 end"><button class="btn sm ghost" @click="s.pe=null">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary" @click="savePersonEdit">{{ tr('حفظ الهوية', 'Save ID') }}</button></div>
+          </div>
+
           <div class="scroll"><table class="tbl">
-            <thead><tr><th>{{ tr('الاسم', 'Name') }}</th><th>{{ tr('الرقم', 'No.') }}</th><th>{{ tr('الدور', 'Role') }}</th><th>{{ tr('الموقع الحالي', 'Current location') }}</th><th>{{ tr('آخر ظهور', 'Last seen') }}</th><th>{{ tr('الدم', 'Blood') }}</th><th>{{ tr('الهاتف', 'Phone') }}</th><th></th></tr></thead>
+            <thead><tr><th>{{ tr('الاسم', 'Name') }}</th><th>{{ tr('الرقم', 'No.') }}</th><th>{{ tr('المسمى', 'Title') }}</th><th>{{ tr('الموقع الحالي', 'Current location') }}</th><th>{{ tr('آخر ظهور', 'Last seen') }}</th><th>{{ tr('الدم', 'Blood') }}</th><th>{{ tr('الهاتف', 'Phone') }}</th><th></th></tr></thead>
             <tbody><tr v-for="p in s.people" :key="p.id">
-              <td><i class="dot" :class="p.online ? 'on' : ''"></i>{{ p.full_name }}</td><td class="mono">{{ p.employee_no }}</td>
-              <td>{{ p.role==='ort' ? 'ORT' : tr('موظف', 'Employee') }}</td>
+              <td><div class="who-cell"><span class="ava" :style="avatar(p) ? {backgroundImage: 'url(' + avatar(p) + ')'} : {}"><i class="dot" :class="p.online ? 'on' : ''"></i></span><span>{{ p.full_name }}<small class="muted d">{{ p.role==='ort' ? 'ORT' : (p.department || tr('موظف', 'Employee')) }}<template v-if="p.active===false"> · {{ tr('موقوف', 'inactive') }}</template></small></span></div></td>
+              <td class="mono">{{ p.employee_no }}</td>
+              <td>{{ p.job_title || '—' }}</td>
               <td class="muted">{{ [name('sector', p.cur_sector_id), name('zone', p.cur_zone_id), name('building', p.cur_building_id)].filter(x=>x!=='—').join(' › ') || tr('خارج الحدود', 'Outside all boundaries') }}</td>
               <td class="muted">{{ ago(p.last_seen) }}</td><td class="mono">{{ p.blood_type }}</td><td class="mono" dir="ltr">{{ p.phone }}</td>
-              <td class="nowrap"><button class="btn xs" @click="callPerson(p.id)" :disabled="p.id===s.me.id">{{ tr('اتصال صوتي', 'Voice call') }}</button></td>
+              <td class="nowrap"><button class="btn xs" @click="editPerson(p)">{{ tr('الهوية والصورة', 'ID & photo') }}</button> <button class="btn xs" @click="callPerson(p.id)" :disabled="p.id===s.me.id">{{ tr('اتصال', 'Call') }}</button></td>
             </tr></tbody>
           </table></div>
+
+          <h2 class="sec gap">{{ tr('التحقق من رمز الهوية', 'Verify an ID code') }}</h2>
+          <form class="row gap8 verify" @submit.prevent="verifyId">
+            <input v-model="s.verifyCode" dir="ltr" :placeholder="tr('الصق الرمز المقروء من QR', 'Paste the code read from the QR')" :aria-label="tr('رمز الهوية', 'ID code')">
+            <button class="btn sm primary">{{ tr('تحقق', 'Verify') }}</button>
+          </form>
+          <p v-if="s.verifyResult" class="verify-result" :class="s.verifyResult.valid ? 'ok' : 'bad'">
+            <template v-if="s.verifyResult.valid">✓ {{ tr('هوية صالحة', 'Valid ID') }} — {{ s.verifyResult.profile.full_name }} · {{ s.verifyResult.profile.employee_no }} · {{ s.verifyResult.profile.job_title }}</template>
+            <template v-else>✕ {{ tr('رمز غير صالح أو منتهي (صالح 30 ثانية فقط)', 'Invalid or expired code (valid 30 seconds only)') }}</template>
+          </p>
         </template>
 
         <!-- REPORTS -->
