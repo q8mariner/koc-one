@@ -1,0 +1,27 @@
+name: koc_one
+description: KOC ONE — employee safety app (alarms, boundary alerts, encrypted 160 reports, voice calls from ORT).
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  supabase_flutter: ^2.8.4
+  geolocator: ^13.0.2
+  flutter_local_notifications: ^18.0.1
+  permission_handler: ^11.3.1
+  audioplayers: ^6.1.0
+  image_picker: ^1.1.2
+  pointycastle: ^3.9.1
+  flutter_webrtc: ^0.12.5
+  url_launcher: ^6.3.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sounds/

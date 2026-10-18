@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KOC ONE · ORT 160</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- ───── Login ───── -->
+  <main v-if="!s.session" class="login">
+    <form class="login-card" @submit.prevent="login">
+      <div class="brand"><span class="mark">KOC</span><span>ONE</span></div>
+      <h1>لوحة فريق المرونة المؤسسية</h1>
+      <p class="muted">مركز ECC-160 · دخول مخصص لأعضاء ORT</p>
+      <label for="em">البريد الإلكتروني</label>
+      <input id="em" type="email" v-model="s.email" autocomplete="username" required dir="ltr">
+      <label for="pw">كلمة المرور</label>
+      <input id="pw" type="password" v-model="s.password" autocomplete="current-password" required dir="ltr">
+      <p class="err" v-if="s.authErr">{{ s.authErr }}</p>
+      <button class="btn primary" :disabled="s.busy">{{ s.busy ? 'جارٍ الدخول…' : 'دخول' }}</button>
+    </form>
+  </main>
+
+  <main v-else-if="s.me && s.me.role !== 'ort'" class="login">
+    <div class="login-card"><h1>الحساب ليس ضمن فريق ORT</h1><p class="muted">هذه اللوحة لأعضاء فريق المرونة المؤسسية فقط. استخدم تطبيق KOC ONE على الهاتف.</p>
+      <button class="btn" @click="logout">خروج</button></div>
+  </main>
+
+  <!-- ───── Console ───── -->
+  <div v-else-if="s.me" class="shell">
+    <header class="top">
+      <div class="brand"><span class="mark">KOC</span><span>ONE</span><small>ORT · ECC-160</small></div>
+      <div class="kpis">
+        <div class="kpi" :class="{hot: kpi.active}"><b>{{ kpi.active }}</b><span>إنذار نشط</span></div>
+        <div class="kpi"><b>{{ kpi.inside }}<i>/{{ kpi.staff }}</i></b><span>داخل الحدود</span></div>
+        <div class="kpi"><b>{{ kpi.online }}</b><span>متصل الآن</span></div>
+        <div class="kpi" :class="{warn: kpi.newReports}"><b>{{ kpi.newReports }}</b><span>بلاغ جديد</span></div>
+      </div>
+      <div class="who"><span>{{ s.me.full_name }}</span><button class="btn ghost sm" @click="logout">خروج</button></div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button v-for="(t,k) in {map:'الخريطة الحية', alarms:'الإنذارات', structure:'القطاعات والحدود', people:'الموظفون', reports:'البلاغات المشفرة', keys:'مفتاح التشفير'}"
+        :key="k" :class="{on: s.tab===k}" @click="s.tab=k" role="tab">{{ t }}<em v-if="k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="k==='alarms' && kpi.active" class="red">{{ kpi.active }}</em></button>
+    </nav>
+
+    <div class="work" :class="{wide: ['people','reports','keys'].includes(s.tab)}">
+      <section class="panel">
+
+        <!-- LIVE MAP -->
+        <template v-if="s.tab==='map'">
+          <h2>الوضع الآن</h2>
+          <div v-if="!activeAlarms.length" class="calm">لا يوجد إنذار نشط. الخريطة تعرض آخر موقع معروف عند عبور الحدود فقط — لا تتبّع مستمر.</div>
+          <div v-for="a in activeAlarms" :key="a.id" class="alarm-card" :class="KINDS[a.kind].cls" @click="s.selAlarm=a.id; s.tab='alarms'">
+            <div class="row"><strong>{{ a.title }}</strong><span class="chip" v-if="a.drill">تمرين</span></div>
+            <div class="muted">{{ SCOPES[a.scope] }}<template v-if="a.scope!=='all'"> · {{ name(a.scope, a.target_id) }}</template> · {{ ago(a.created_at) }}</div>
+            <div class="bar"><span :style="{width: counts(a).pct+'%'}"></span></div>
+            <div class="mini-stats"><span>آمن {{ counts(a).safe }}/{{ counts(a).total }}</span><span class="bad">مصاب/محتجز {{ counts(a).injured + counts(a).trapped }}</span><span>بدون رد {{ counts(a).received + counts(a).none }}</span></div>
+          </div>
+          <h3>القطاعات</h3>
+          <ul class="tree">
+            <li v-for="sec in s.sectors" :key="sec.id">
+              <button class="node" @click="focus(sec)"><i class="dot" :style="{background: sec.color}"></i>{{ sec.name }}<span class="count">{{ peopleIn('cur_sector_id', sec.id) }}</span></button>
+              <ul><li v-for="z in zonesOf(sec.id)" :key="z.id"><button class="node" @click="focus(z)">{{ z.name }} <span class="cls" :class="z.classification">{{ CLASSES[z.classification] }}</span><span class="count">{{ peopleIn('cur_zone_id', z.id) }}</span></button>
+                <ul><li v-for="b in buildingsOf(z.id)" :key="b.id"><button class="node" @click="focus(b)">{{ b.name }}<span class="count">{{ peopleIn('cur_building_id', b.id) }}</span></button></li></ul></li></ul>
+            </li>
+          </ul>
+          <div class="legend"><span><i style="background:#22c55e"></i>آمن</span><span><i style="background:#facc15"></i>استلم ولم يرد</span><span><i style="background:#ef4444"></i>مصاب/محتجز</span><span><i style="background:#38bdf8"></i>متصل</span><span><i style="background:#64748b"></i>غير متصل</span></div>
+        </template>
+
+        <!-- ALARMS -->
+        <template v-if="s.tab==='alarms'">
+          <h2>إطلاق إنذار</h2>
+          <div class="kinds">
+            <button v-for="(k,key) in KINDS" :key="key" class="kind" :class="[k.cls, {on: s.af.kind===key}]" @click="setKind(key)">{{ k.label }}</button>
+          </div>
+          <label for="scope">نطاق الإنذار</label>
+          <div class="seg" id="scope">
+            <button v-for="(v,k) in SCOPES" :key="k" :class="{on: s.af.scope===k}" @click="s.af.scope=k; s.af.target_id=''">{{ v }}</button>
+          </div>
+          <template v-if="s.af.scope!=='all'">
+            <label for="tgt">الهدف</label>
+            <select id="tgt" v-model="s.af.target_id"><option value="" disabled>اختر…</option><option v-for="t in targets" :key="t.id" :value="t.id">{{ t.name }}</option></select>
+          </template>
+          <p class="reach">يصل إلى <b>{{ reach }}</b> {{ s.af.scope==='employee' ? 'موظف' : 'موظفًا داخل الحدود الآن' }}<span v-if="s.af.scope!=='employee'" class="muted"> — ويصل أيضًا لكل من يدخل الحدود ما دام الإنذار نشطًا</span></p>
+          <label for="ttl">العنوان</label><input id="ttl" v-model="s.af.title">
+          <label for="bdy">التعليمات</label><textarea id="bdy" v-model="s.af.body" rows="4"></textarea>
+          <label class="check"><input type="checkbox" v-model="s.af.drill"> وضع التمرين (Drill) — لا يُحتسب حادثًا فعليًا</label>
+          <fieldset v-if="s.af.kind!=='message'" class="dual">
+            <legend>تأكيد ثنائي</legend>
+            <label for="sec2">اسم الضابط الثاني المؤكِّد</label><input id="sec2" v-model="s.af.second" placeholder="مثال: مشرف الوردية">
+            <label class="check"><input type="checkbox" v-model="s.af.confirm"> أؤكد إطلاق {{ KINDS[s.af.kind].short }} على النطاق المحدد</label>
+          </fieldset>
+          <button class="btn launch" :class="KINDS[s.af.kind].cls" @click="launch">إطلاق {{ KINDS[s.af.kind].short }}</button>
+
+          <h2 class="gap">الإنذارات</h2>
+          <div class="list">
+            <button v-for="a in s.alarms" :key="a.id" class="alarm-row" :class="[KINDS[a.kind].cls, {on: s.selAlarm===a.id, off: !a.active}]" @click="s.selAlarm=a.id">
+              <span class="tag">{{ KINDS[a.kind].short }}</span><span class="grow">{{ SCOPES[a.scope] }}<template v-if="a.scope!=='all'"> · {{ name(a.scope, a.target_id) }}</template></span>
+              <span class="muted">{{ a.active ? 'نشط' : 'مغلق' }} · {{ fmt(a.created_at) }}</span>
+            </button>
+          </div>
+
+          <div v-if="selAlarmObj" class="roster">
+            <div class="row"><h3>{{ selAlarmObj.title }} <span class="chip" v-if="selAlarmObj.drill">تمرين</span></h3>
+              <div v-if="selAlarmObj.active" class="row gap8"><button class="btn sm k3" @click="closeAlarm(selAlarmObj, true)">الإشارة 3 · زوال الخطر</button><button class="btn sm ghost" @click="closeAlarm(selAlarmObj,false)">إغلاق فقط</button></div></div>
+            <p class="muted">أطلقه {{ name('employee', selAlarmObj.created_by) }}<template v-if="selAlarmObj.confirmed_by_name"> · أكّده {{ selAlarmObj.confirmed_by_name }}</template> · {{ fmt(selAlarmObj.created_at) }}</p>
+            <div class="stat-grid">
+              <div><b>{{ counts(selAlarmObj).pct }}%</b><span>نسبة الحصر</span></div>
+              <div class="ok"><b>{{ counts(selAlarmObj).safe }}</b><span>آمن</span></div>
+              <div class="bad"><b>{{ counts(selAlarmObj).trapped }}</b><span>محتجز</span></div>
+              <div class="bad"><b>{{ counts(selAlarmObj).injured }}</b><span>مصاب</span></div>
+              <div class="warn"><b>{{ counts(selAlarmObj).need_help }}</b><span>يحتاج مساعدة</span></div>
+              <div><b>{{ counts(selAlarmObj).received + counts(selAlarmObj).none }}</b><span>بدون رد</span></div>
+            </div>
+            <table class="tbl">
+              <thead><tr><th>الموظف</th><th>الحالة</th><th>الموقع</th><th>الدم</th><th></th></tr></thead>
+              <tbody><tr v-for="r in alarmRoster(selAlarmObj)" :key="r.p.id">
+                <td>{{ r.p.full_name }}<small class="muted d">{{ r.p.employee_no }}</small></td>
+                <td><span class="st" :class="STATUS[r.st][1]">{{ STATUS[r.st][0] }}</span></td>
+                <td class="muted">{{ name('building', r.p.cur_building_id) !== '—' ? name('building', r.p.cur_building_id) : name('zone', r.p.cur_zone_id) }}<small class="d">{{ r.k ? ago(r.k.updated_at) : '' }}</small></td>
+                <td class="mono">{{ r.p.blood_type || '—' }}</td>
+                <td class="nowrap"><button class="btn sm" @click="callPerson(r.p.id)">اتصال</button><small class="d mono" dir="ltr">{{ r.p.phone }}</small></td>
+              </tr><tr v-if="!alarmRoster(selAlarmObj).length"><td colspan="5" class="muted">لا أحد داخل نطاق هذا الإنذار حاليًا.</td></tr></tbody>
+            </table>
+          </div>
+        </template>
+
+        <!-- STRUCTURE -->
+        <template v-if="s.tab==='structure'">
+          <div class="row"><h2>القطاعات · Zones · المباني</h2><button class="btn sm primary" @click="newItem('sector')">+ قطاع</button></div>
+          <div v-if="s.edit" class="editor">
+            <h3>{{ s.edit.id ? 'تعديل' : 'إضافة' }} {{ {sector:'قطاع', zone:'Zone', building:'مبنى'}[s.edit.type] }}</h3>
+            <label for="nm">الاسم</label><input id="nm" v-model="s.edit.name">
+            <template v-if="s.edit.type==='sector'"><label for="clr">اللون على الخريطة</label><input id="clr" type="color" v-model="s.edit.color"></template>
+            <template v-if="s.edit.type==='zone'">
+              <label for="ps">القطاع</label><select id="ps" v-model="s.edit.parent"><option v-for="x in s.sectors" :key="x.id" :value="x.id">{{ x.name }}</option></select>
+              <label for="cl">تصنيف المنطقة الخطرة</label><select id="cl" v-model="s.edit.classification"><option v-for="(v,k) in CLASSES" :key="k" :value="k">{{ v }}</option></select>
+            </template>
+            <template v-if="s.edit.type==='building'">
+              <label for="pz">الـ Zone</label><select id="pz" v-model="s.edit.parent"><option v-for="x in s.zones" :key="x.id" :value="x.id">{{ x.name }} — {{ name('sector', x.sector_id) }}</option></select>
+              <div class="two"><div><label for="cd">الرمز</label><input id="cd" v-model="s.edit.code"></div><div><label for="mp">نقطة التجمع</label><input id="mp" v-model="s.edit.muster_point" placeholder="MP-3 · الساحة الشمالية"></div></div>
+            </template>
+            <label for="msg">رسالة عند دخول الحدود</label><textarea id="msg" v-model="s.edit.entry_message" rows="2" placeholder="تظهر على هاتف الموظف عند عبوره حدود المنطقة"></textarea>
+            <label>حدود GPS</label>
+            <div class="row gap8 wrap">
+              <button v-if="!s.drawing" class="btn sm" @click="startDraw">ارسم المضلع على الخريطة</button>
+              <button v-else class="btn sm warn" @click="cancelDraw">إلغاء الرسم</button>
+              <button class="btn sm ghost" @click="useMyGps">أضف موقعي الحالي (GPS)</button>
+            </div>
+            <textarea v-model="s.edit.coordsText" rows="4" dir="ltr" class="mono" placeholder="29.0760, 48.0760&#10;29.0760, 48.0790&#10;29.0740, 48.0790"></textarea>
+            <div class="row gap8"><button class="btn sm ghost" @click="parseCoords">تطبيق الإحداثيات</button><span class="muted">{{ s.edit.boundary ? s.edit.boundary.length + ' نقاط' : 'بدون حدود' }}</span></div>
+            <div class="row gap8 end">
+              <button v-if="s.edit.id" class="btn sm danger" @click="deleteItem">{{ s.edit.confirmDel ? 'اضغط مجددًا لتأكيد الحذف' : 'حذف' }}</button>
+              <button class="btn sm ghost" @click="s.edit=null; cancelDraw()">إلغاء</button><button class="btn sm primary" @click="saveItem">حفظ</button>
+            </div>
+          </div>
+          <ul class="tree edit">
+            <li v-for="sec in s.sectors" :key="sec.id">
+              <div class="node"><i class="dot" :style="{background: sec.color}"></i><button class="link" @click="editItem('sector', sec)">{{ sec.name }}</button><span class="grow"></span><button class="btn xs ghost" @click="newItem('zone', sec.id)">+ Zone</button></div>
+              <ul><li v-for="z in zonesOf(sec.id)" :key="z.id">
+                <div class="node"><button class="link" @click="editItem('zone', z)">{{ z.name }}</button><span class="cls" :class="z.classification">{{ CLASSES[z.classification] }}</span><span class="grow"></span><button class="btn xs ghost" @click="newItem('building', z.id)">+ مبنى</button></div>
+                <ul><li v-for="b in buildingsOf(z.id)" :key="b.id"><div class="node"><button class="link" @click="editItem('building', b)">{{ b.name }}</button><span class="muted">{{ b.muster_point }}</span><span v-if="!b.boundary" class="chip">بلا حدود</span></div></li></ul>
+              </li></ul>
+            </li>
+          </ul>
+        </template>
+
+        <!-- PEOPLE -->
+        <template v-if="s.tab==='people'">
+          <div class="row"><h2>الموظفون</h2><button class="btn sm primary" @click="newPerson">+ حساب موظف</button></div>
+          <form v-if="s.pf" class="editor grid3" @submit.prevent="savePerson">
+            <div><label for="pfn">الاسم الكامل</label><input id="pfn" v-model="s.pf.full_name"></div>
+            <div><label for="pfe">الرقم الوظيفي</label><input id="pfe" v-model="s.pf.employee_no"></div>
+            <div><label for="pfp">الهاتف</label><input id="pfp" v-model="s.pf.phone" dir="ltr" placeholder="+965…"></div>
+            <div><label for="pfm">البريد (اسم الدخول)</label><input id="pfm" v-model="s.pf.email" type="email" dir="ltr"></div>
+            <div><label for="pfw">كلمة مرور مؤقتة</label><input id="pfw" v-model="s.pf.password" dir="ltr"></div>
+            <div><label for="pfb">فصيلة الدم</label><select id="pfb" v-model="s.pf.blood_type"><option v-for="b in ['O+','O-','A+','A-','B+','B-','AB+','AB-']" :key="b">{{ b }}</option></select></div>
+            <div><label for="pfr">الدور</label><select id="pfr" v-model="s.pf.role"><option value="employee">موظف</option><option value="ort">عضو ORT</option></select></div>
+            <div class="row gap8 end span2"><button type="button" class="btn sm ghost" @click="s.pf=null">إلغاء</button><button class="btn sm primary">إنشاء الحساب</button></div>
+          </form>
+          <div class="scroll"><table class="tbl">
+            <thead><tr><th>الاسم</th><th>الرقم</th><th>الدور</th><th>الموقع الحالي</th><th>آخر ظهور</th><th>الدم</th><th>الهاتف</th><th></th></tr></thead>
+            <tbody><tr v-for="p in s.people" :key="p.id">
+              <td><i class="dot" :class="p.online ? 'on' : ''"></i>{{ p.full_name }}</td><td class="mono">{{ p.employee_no }}</td>
+              <td>{{ p.role==='ort' ? 'ORT' : 'موظف' }}</td>
+              <td class="muted">{{ [name('sector', p.cur_sector_id), name('zone', p.cur_zone_id), name('building', p.cur_building_id)].filter(x=>x!=='—').join(' › ') || 'خارج الحدود' }}</td>
+              <td class="muted">{{ ago(p.last_seen) }}</td><td class="mono">{{ p.blood_type }}</td><td class="mono" dir="ltr">{{ p.phone }}</td>
+              <td class="nowrap"><button class="btn xs" @click="callPerson(p.id)" :disabled="p.id===s.me.id">اتصال صوتي</button></td>
+            </tr></tbody>
+          </table></div>
+        </template>
+
+        <!-- REPORTS -->
+        <template v-if="s.tab==='reports'">
+          <div class="row"><h2>بلاغات 160 المشفرة</h2>
+            <form v-if="!s.privKey && s.hasKey" class="row gap8" @submit.prevent="unlockKey"><input type="password" v-model="s.pass" placeholder="عبارة مرور المفتاح" aria-label="عبارة مرور المفتاح"><button class="btn sm primary">فتح المفتاح</button></form>
+            <span v-else-if="s.privKey" class="chip ok">المفتاح مفتوح لهذه الجلسة</span>
+          </div>
+          <p v-if="!s.hasKey" class="calm">لم يُنشأ مفتاح التشفير بعد. أنشئه من تبويب «مفتاح التشفير» قبل أن يرسل الموظفون البلاغات.</p>
+          <div class="reports">
+            <article v-for="r in s.reports" :key="r.id" class="report" :class="r.status">
+              <header class="row"><strong>{{ REPORT_TYPES[r.type] || r.type }}</strong><span class="muted">{{ name('employee', r.user_id) }} · {{ fmt(r.created_at) }}</span></header>
+              <p class="muted">{{ name('building', r.building_id) !== '—' ? name('building', r.building_id) : name('zone', r.zone_id) }}<span class="mono" dir="ltr" v-if="r.lat"> · {{ r.lat.toFixed(5) }}, {{ r.lng.toFixed(5) }}</span> · {{ (r.photo_paths||[]).length }} صورة مشفرة</p>
+              <div v-if="s.opened[r.id]" class="opened">
+                <p>{{ s.opened[r.id].description || 'بدون وصف' }}</p>
+                <div class="photos"><img v-for="(u,i) in s.opened[r.id].photos" :key="i" :src="u" alt="صورة البلاغ"></div>
+              </div>
+              <div class="row gap8">
+                <button v-if="!s.opened[r.id]" class="btn sm" @click="openReport(r)">فك التشفير والعرض</button>
+                <select :value="r.status" @change="setReportStatus(r, $event.target.value)" aria-label="حالة البلاغ"><option v-for="(v,k) in REPORT_STATUS" :key="k" :value="k">{{ v }}</option></select>
+                <button class="btn sm ghost" @click="callPerson(r.user_id)">اتصال بالمُبلّغ</button>
+              </div>
+            </article>
+            <p v-if="!s.reports.length" class="muted">لا توجد بلاغات.</p>
+          </div>
+        </template>
+
+        <!-- KEYS -->
+        <template v-if="s.tab==='keys'">
+          <h2>مفتاح تشفير البلاغات</h2>
+          <p class="prose">يشفّر تطبيق الموظف كل بلاغ وصوره على الهاتف نفسه (AES-256-GCM) قبل الإرسال، ويغلّف مفتاح البلاغ بالمفتاح العام لفريق ORT (RSA-OAEP 2048). لا يستطيع أحد غير حامل عبارة المرور قراءة البلاغات — ولا حتى مدير قاعدة البيانات. تُحذف الصور من الهاتف بعد الإرسال.</p>
+          <p v-if="s.hasKey" class="chip ok">يوجد مفتاح فعّال · {{ fmt(s.keyRow.updated_at) }}</p>
+          <div class="editor">
+            <h3>{{ s.hasKey ? 'استبدال المفتاح' : 'إنشاء المفتاح' }}</h3>
+            <label for="np">عبارة المرور (10 أحرف على الأقل)</label><input id="np" type="password" v-model="s.newPass">
+            <label for="np2">تأكيد العبارة</label><input id="np2" type="password" v-model="s.newPass2">
+            <p v-if="s.hasKey" class="err">تنبيه: البلاغات القديمة لن تُقرأ بالمفتاح الجديد.</p>
+            <button class="btn primary" @click="setupKeys">{{ s.confirmRotate ? 'اضغط مجددًا لتأكيد الاستبدال' : (s.hasKey ? 'استبدال المفتاح' : 'إنشاء المفتاح') }}</button>
+          </div>
+        </template>
+      </section>
+
+      <div class="mapwrap" v-show="!['people','reports','keys'].includes(s.tab)"><div id="map"></div>
+        <button class="fit" @click="fitAll">عرض الكل</button>
+        <div v-if="s.drawing" class="draw-hint">انقر لإضافة رؤوس المضلع، ثم انقر النقطة الأولى للإغلاق</div>
+      </div>
+    </div>
+
+    <!-- Call overlay -->
+    <div v-if="s.call" class="call" role="dialog" aria-label="مكالمة صوتية">
+      <div class="pulse" :class="s.callState"></div>
+      <div><strong>{{ s.call.full_name }}</strong><div class="muted">{{ CALL_LABEL[s.callState] || s.callState }}</div><div class="mono muted" dir="ltr">{{ s.call.phone }}</div></div>
+      <button class="btn sm ghost" @click="toggleMute">{{ s.muted ? 'إلغاء الكتم' : 'كتم' }}</button>
+      <button class="btn sm danger" @click="hangup">إنهاء</button>
+    </div>
+    <div v-if="s.toast" class="toast" role="status">{{ s.toast }}</div>
+  </div>
+  <main v-else class="login"><p class="muted">جارٍ التحميل…</p></main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="crypto.js"></script>
+<script src="rtc.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
