@@ -1,9 +1,12 @@
-// Full-screen alarm. The tone is played natively on the alarm stream (see NativeAlarm).
-// The screen cannot be dismissed until the employee records a status; if they leave the app,
-// LiveService brings it back every 15 seconds.
+// Full-screen alarm, designed after the proposal's alarm screens (Annex F).
+// The tone plays natively on the alarm stream (see NativeAlarm). The screen cannot be dismissed
+// until the employee records a status; if they leave the app it returns every 15 seconds.
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../services/live.dart';
+import '../ui.dart';
 
 class AlarmScreen extends StatefulWidget {
   final Map<String, dynamic> alarm;
@@ -12,13 +15,23 @@ class AlarmScreen extends StatefulWidget {
   State<AlarmScreen> createState() => _AlarmScreenState();
 }
 
+class _Look {
+  final Color bg, panel, accent;
+  final IconData icon;
+  final String eyebrow, tone;
+  const _Look(this.bg, this.panel, this.accent, this.icon, this.eyebrow, this.tone);
+}
+
+const _looks = {
+  'signal1': _Look(C.sig1, Color(0xFF9E1F1F), Color(0xFF5C1111), Icons.warning_amber_rounded, 'SIGNAL 1 · EMERGENCY', 'نغمة متقطّعة (Broken)'),
+  'signal2': _Look(C.sig2, Color(0xFF1E2026), C.sig1, Icons.login_rounded, 'SIGNAL 2 · EVACUATION', 'نغمة متموّجة (Wailing)'),
+  'signal3': _Look(C.sig3, Color(0xFF247D48), C.sig3, Icons.check_circle_outline_rounded, 'SIGNAL 3 · ALL CLEAR', 'نغمة متصلة ثابتة'),
+};
+
 class _AlarmScreenState extends State<AlarmScreen> {
   final live = LiveService.I;
   Map<String, dynamic> get a => widget.alarm;
   String get kind => a['kind'] as String;
-
-  static const _colors = {'signal1': Color(0xFFB45309), 'signal2': Color(0xFFB91C1C), 'signal3': Color(0xFF15803D)};
-  static const _tones = {'signal1': 'تقطّع · خطر محتمل', 'signal2': 'متموّج · وقع الخطر', 'signal3': 'متصل · انتهى الخطر'};
 
   @override
   void initState() {
@@ -47,57 +60,103 @@ class _AlarmScreenState extends State<AlarmScreen> {
     if (status == 'safe' && Navigator.canPop(context)) Navigator.pop(context);
   }
 
+  String _clock(dynamic t) {
+    final d = DateTime.tryParse('$t')?.toLocal();
+    if (d == null) return '';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.hour)}:${two(d.minute)}:${two(d.second)}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final c = _colors[kind] ?? const Color(0xFF0E7490);
+    final look = _looks[kind] ?? const _Look(C.navy, C.navyD, C.navy, Icons.campaign, 'ALERT', '');
     final mine = live.myStatus[a['id']];
-    final steps = ((a['body'] as String?) ?? '').split('\n').where((s) => s.trim().isNotEmpty).toList();
+    final steps = ((a['body'] as String?) ?? '')
+        .split('\n')
+        .map((s) => s.trim().replaceFirst(RegExp(r'^\d+[.)]\s*'), ''))
+        .where((s) => s.isNotEmpty)
+        .toList();
     final muster = live.musterPoint();
+    if (kind == 'signal2' && muster != null && !steps.any((s) => s.contains(muster))) steps.add('توجّه إلى نقطة التجمع: $muster');
+
     return PopScope(
       canPop: _answered,
       child: Scaffold(
-        backgroundColor: c,
+        backgroundColor: look.bg,
         body: SafeArea(
-          child: ListView(padding: const EdgeInsets.all(20), children: [
+          child: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 20), children: [
             Row(children: [
-              Text(a['drill'] == true ? 'تمرين · DRILL' : 'KOC ONE · ECC-160',
-                  style: const TextStyle(letterSpacing: 2, fontWeight: FontWeight.w700, color: Colors.white70)),
+              if (a['drill'] == true) const Tag('تمرين · DRILL', color: Colors.black26),
               const Spacer(),
-              if (_answered) IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+              if (_answered) IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, color: Colors.white)),
             ]),
-            const SizedBox(height: 8),
-            Text(a['title'] ?? '', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, height: 1.2)),
+            const SizedBox(height: 12),
+            // icon with halo
+            Center(
+              child: Container(
+                width: 132,
+                height: 132,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: .12)),
+                alignment: Alignment.center,
+                child: Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: .22)),
+                  child: Icon(look.icon, color: Colors.white, size: 42),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(look.eyebrow, textAlign: TextAlign.center, textDirection: TextDirection.ltr, style: const TextStyle(color: Colors.white70, letterSpacing: 2.5, fontSize: 12, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text(a['title'] ?? '', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900, height: 1.25)),
             const SizedBox(height: 6),
-            Text('${live.areaLabel()}${_tones[kind] != null ? ' · نغمة ${_tones[kind]}' : ''}', style: const TextStyle(color: Colors.white70)),
-            const SizedBox(height: 20),
-            for (final s in steps)
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: Colors.black.withValues(alpha: .2), borderRadius: BorderRadius.circular(10)),
-                child: Text(s, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-              ),
-            if (muster != null && kind == 'signal2')
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(border: Border.all(color: Colors.white54), borderRadius: BorderRadius.circular(10)),
-                child: Text('نقطة التجمع: $muster', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-              ),
-            const SizedBox(height: 16),
-            if (kind == 'signal3')
-              _btn('حسنًا — عودة إلى العمل', Colors.white, Colors.black, () => _set('safe'))
-            else ...[
-              Text(_answered ? 'سُجّلت حالتك: ${_label(mine)} — يمكنك تحديثها' : 'يجب اختيار حالتك الآن — تصل فورًا لمسؤول الإخلاء و ORT',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-              const SizedBox(height: 10),
-              _btn('أُخليت — أنا آمن', const Color(0xFF22C55E), Colors.black, () => _set('safe'), selected: mine == 'safe'),
-              _btn('أحتاج مساعدة', const Color(0xFFFB923C), Colors.black, () => _set('need_help'), selected: mine == 'need_help'),
-              _btn('مصاب — أحتاج إسعافًا', Colors.white, const Color(0xFFB91C1C), () => _set('injured'), selected: mine == 'injured'),
-              _btn('محتجز داخل المبنى', Colors.black, Colors.white, () => _set('trapped'), selected: mine == 'trapped'),
-            ],
+            Text('${live.areaLabel()} · ${_clock(a['created_at'])}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
             const SizedBox(height: 8),
-            const Text('موقعك يُشارك مع فرق الاستجابة أثناء الحادث فقط حتى «زوال الخطر».', style: TextStyle(color: Colors.white70, fontSize: 12)),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              _ToneMark(kind: kind),
+              const SizedBox(width: 8),
+              Text(look.tone, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            ]),
+            const SizedBox(height: 20),
+            // numbered steps
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: look.panel, borderRadius: BorderRadius.circular(14)),
+              child: Column(children: [
+                for (var i = 0; i < steps.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      CircleAvatar(radius: 12, backgroundColor: Colors.white, child: Text('${i + 1}', style: TextStyle(color: look.bg, fontWeight: FontWeight.w800, fontSize: 12))),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(steps[i], style: const TextStyle(color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w600, height: 1.45))),
+                    ]),
+                  ),
+              ]),
+            ),
+            const SizedBox(height: 18),
+            if (kind == 'signal3')
+              _btn('العودة إلى العمل', Colors.white, C.sig3, Icons.check_circle_outline, () => _set('safe'))
+            else ...[
+              Text(_answered ? 'سُجّلت حالتك: ${_label(mine)} — يمكنك تحديثها' : 'اختر حالتك الآن — تصل فورًا لمسؤول الإخلاء و ORT',
+                  textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(child: _btn(kind == 'signal1' ? 'أنا بخير' : 'أنا بأمان', Colors.white, C.ok, Icons.check_circle_outline, () => _set('safe'), selected: mine == 'safe')),
+                const SizedBox(width: 10),
+                Expanded(child: _btn('أحتاج مساعدة', look.accent, Colors.white, Icons.warning_amber_rounded, () => _set('need_help'), selected: mine == 'need_help')),
+              ]),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(child: _outline('مصاب', Icons.medical_services_outlined, () => _set('injured'), mine == 'injured')),
+                const SizedBox(width: 10),
+                Expanded(child: _outline('محتجز داخل المبنى', Icons.door_front_door_outlined, () => _set('trapped'), mine == 'trapped')),
+              ]),
+            ],
+            const SizedBox(height: 14),
+            const Text('التنبيه يتجاوز الوضع الصامت · يصل لكل من بالموقع · موقعك يُشارك أثناء الحادث فقط',
+                textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 11.5)),
           ]),
         ),
       ),
@@ -106,18 +165,66 @@ class _AlarmScreenState extends State<AlarmScreen> {
 
   static String _label(String? s) => const {'safe': 'آمن', 'need_help': 'يحتاج مساعدة', 'injured': 'مصاب', 'trapped': 'محتجز'}[s] ?? '';
 
-  Widget _btn(String t, Color bg, Color fg, VoidCallback onTap, {bool selected = false}) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: FilledButton(
-          onPressed: onTap,
-          style: FilledButton.styleFrom(
-            backgroundColor: bg,
-            foregroundColor: fg,
-            padding: const EdgeInsets.all(18),
-            side: selected ? const BorderSide(color: Colors.white, width: 3) : null,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          child: Text(selected ? '✓  $t' : t, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+  Widget _btn(String t, Color bg, Color fg, IconData icon, VoidCallback onTap, {bool selected = false}) => FilledButton.icon(
+        onPressed: onTap,
+        icon: Icon(selected ? Icons.check : icon, size: 20),
+        label: Text(t, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        style: FilledButton.styleFrom(
+          backgroundColor: bg,
+          foregroundColor: fg,
+          minimumSize: const Size.fromHeight(56),
+          side: selected ? const BorderSide(color: C.yellow, width: 3) : null,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
+
+  Widget _outline(String t, IconData icon, VoidCallback onTap, bool selected) => OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(selected ? Icons.check : icon, size: 18),
+        label: Text(t, style: const TextStyle(fontWeight: FontWeight.w700)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          minimumSize: const Size.fromHeight(50),
+          side: BorderSide(color: selected ? C.yellow : Colors.white54, width: selected ? 3 : 1.2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+}
+
+/// Small visual of the tone: dashes (broken), wave (wailing) or a steady line.
+class _ToneMark extends StatelessWidget {
+  final String kind;
+  const _ToneMark({required this.kind});
+  @override
+  Widget build(BuildContext context) => SizedBox(width: 64, height: 14, child: CustomPaint(painter: _TonePainter(kind)));
+}
+
+class _TonePainter extends CustomPainter {
+  final String kind;
+  _TonePainter(this.kind);
+  @override
+  void paint(Canvas canvas, Size s) {
+    final p = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final y = s.height / 2;
+    if (kind == 'signal1') {
+      for (var x = 2.0; x < s.width; x += 22) {
+        canvas.drawLine(Offset(x, y), Offset(x + 14, y), p);
+      }
+    } else if (kind == 'signal2') {
+      final path = Path()..moveTo(0, y);
+      for (var x = 0.0; x <= s.width; x += 2) {
+        path.lineTo(x, y + 5 * math.sin(x / s.width * 4 * math.pi));
+      }
+      canvas.drawPath(path, p);
+    } else {
+      canvas.drawLine(Offset(2, y), Offset(s.width - 2, y), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TonePainter old) => old.kind != kind;
 }

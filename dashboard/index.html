@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>KOC ONE · ORT 160</title>
+<title>ONE · ORT 160</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
 <link rel="stylesheet" href="styles.css">
@@ -15,10 +15,12 @@
 
   <!-- ───── Login ───── -->
   <main v-if="!s.session" class="login">
+    <div class="login-hero" aria-hidden="true"><i></i><i></i><i></i></div>
     <form class="login-card" @submit.prevent="login">
-      <div class="brand"><span class="mark">KOC</span><span>ONE</span></div>
+      <div class="wordmark"><b>/</b>ONE</div>
+      <span class="tag">ORT · ECC-160</span>
       <h1>لوحة فريق المرونة المؤسسية</h1>
-      <p class="muted">مركز ECC-160 · دخول مخصص لأعضاء ORT</p>
+      <p class="muted">إطلاق الإنذارات · الحصر اللحظي · البلاغات المشفرة</p>
       <label for="em">البريد الإلكتروني</label>
       <input id="em" type="email" v-model="s.email" autocomplete="username" required dir="ltr">
       <label for="pw">كلمة المرور</label>
@@ -29,34 +31,44 @@
   </main>
 
   <main v-else-if="s.me && s.me.role !== 'ort'" class="login">
-    <div class="login-card"><h1>الحساب ليس ضمن فريق ORT</h1><p class="muted">هذه اللوحة لأعضاء فريق المرونة المؤسسية فقط. استخدم تطبيق KOC ONE على الهاتف.</p>
+    <div class="login-hero" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="login-card"><div class="wordmark"><b>/</b>ONE</div><h1>الحساب ليس ضمن فريق ORT</h1><p class="muted">هذه اللوحة لأعضاء فريق المرونة المؤسسية فقط. استخدم تطبيق ONE على الهاتف.</p>
       <button class="btn" @click="logout">خروج</button></div>
   </main>
 
   <!-- ───── Console ───── -->
   <div v-else-if="s.me" class="shell">
-    <header class="top">
-      <div class="brand"><span class="mark">KOC</span><span>ONE</span><small>ORT · ECC-160</small></div>
-      <div class="kpis">
-        <div class="kpi" :class="{hot: kpi.active}"><b>{{ kpi.active }}</b><span>إنذار نشط</span></div>
-        <div class="kpi"><b>{{ kpi.inside }}<i>/{{ kpi.staff }}</i></b><span>داخل الحدود</span></div>
-        <div class="kpi"><b>{{ kpi.online }}</b><span>متصل الآن</span></div>
-        <div class="kpi" :class="{warn: kpi.newReports}"><b>{{ kpi.newReports }}</b><span>بلاغ جديد</span></div>
-      </div>
-      <div class="who"><span>{{ s.me.full_name }}</span><button class="btn ghost sm" @click="logout">خروج</button></div>
-    </header>
-
-    <nav class="tabs" role="tablist">
-      <button v-for="(t,k) in {map:'الخريطة الحية', alarms:'الإنذارات', structure:'القطاعات والحدود', people:'الموظفون', reports:'البلاغات المشفرة', keys:'مفتاح التشفير'}"
-        :key="k" :class="{on: s.tab===k}" @click="s.tab=k" role="tab">{{ t }}<em v-if="k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="k==='alarms' && kpi.active" class="red">{{ kpi.active }}</em></button>
+    <nav class="rail" role="tablist" aria-label="الأقسام">
+      <div class="rail-mark"><b>/</b>ONE</div>
+      <button v-for="n in NAV" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k" role="tab" :title="n.t">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="n.i"/></svg><span>{{ n.t }}</span>
+        <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && kpi.active" class="red">{{ kpi.active }}</em>
+      </button>
+      <button class="out" @click="logout" title="خروج"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg><span>خروج</span></button>
     </nav>
+
+    <div class="main">
+      <header class="top">
+        <div class="titles">
+          <span class="tag">{{ (NAV.find(n=>n.k===s.tab)||{}).tag }}</span>
+          <h1>{{ (NAV.find(n=>n.k===s.tab)||{}).h }}</h1>
+        </div>
+        <div class="who"><span class="live"><i></i>مباشر</span><span>{{ s.me.full_name }}</span></div>
+      </header>
+      <div class="kpis">
+        <div class="kpi c-red" :class="{hot: kpi.active}"><b>{{ kpi.active }}</b><span>إنذار نشط</span></div>
+        <div class="kpi c-navy"><b>{{ kpi.inside }}<i>/{{ kpi.staff }}</i></b><span>داخل الحدود</span></div>
+        <div class="kpi c-green"><b>{{ kpi.online }}</b><span>متصل الآن</span></div>
+        <div class="kpi c-orange"><b>{{ kpi.newReports }}</b><span>بلاغ جديد</span></div>
+        <div class="kpi c-sky"><b>{{ s.sectors.length }}<i> · {{ s.zones.length }} · {{ s.buildings.length }}</i></b><span>قطاع · Zone · مبنى</span></div>
+      </div>
 
     <div class="work" :class="{wide: ['people','reports','keys'].includes(s.tab)}">
       <section class="panel">
 
         <!-- LIVE MAP -->
         <template v-if="s.tab==='map'">
-          <h2>الوضع الآن</h2>
+          <h2 class="sec">الوضع الآن</h2>
           <div v-if="!activeAlarms.length" class="calm">لا يوجد إنذار نشط. الخريطة تعرض آخر موقع معروف عند عبور الحدود فقط — لا تتبّع مستمر.</div>
           <div v-for="a in activeAlarms" :key="a.id" class="alarm-card" :class="KINDS[a.kind].cls" @click="s.selAlarm=a.id; s.tab='alarms'">
             <div class="row"><strong>{{ a.title }}</strong><span class="chip" v-if="a.drill">تمرين</span></div>
@@ -72,12 +84,12 @@
                 <ul><li v-for="b in buildingsOf(z.id)" :key="b.id"><button class="node" @click="focus(b)">{{ b.name }}<span class="count">{{ peopleIn('cur_building_id', b.id) }}</span></button></li></ul></li></ul>
             </li>
           </ul>
-          <div class="legend"><span><i style="background:#22c55e"></i>آمن</span><span><i style="background:#facc15"></i>استلم ولم يرد</span><span><i style="background:#ef4444"></i>مصاب/محتجز</span><span><i style="background:#38bdf8"></i>متصل</span><span><i style="background:#64748b"></i>غير متصل</span></div>
+          <div class="legend"><span><i style="background:#2E9E5B"></i>آمن</span><span><i style="background:#E5B80B"></i>استلم ولم يرد</span><span><i style="background:#C62828"></i>مصاب/محتجز</span><span><i style="background:#2B4C9B"></i>متصل</span><span><i style="background:#94A3B8"></i>غير متصل</span></div>
         </template>
 
         <!-- ALARMS -->
         <template v-if="s.tab==='alarms'">
-          <h2>إطلاق إنذار</h2>
+          <h2 class="sec">إطلاق إنذار</h2>
           <div class="kinds">
             <button v-for="(k,key) in KINDS" :key="key" class="kind" :class="[k.cls, {on: s.af.kind===key}]" @click="setKind(key)">{{ k.label }}</button>
           </div>
@@ -100,7 +112,7 @@
           </fieldset>
           <button class="btn launch" :class="KINDS[s.af.kind].cls" @click="launch">إطلاق {{ KINDS[s.af.kind].short }}</button>
 
-          <h2 class="gap">الإنذارات</h2>
+          <h2 class="sec gap">سجل الإنذارات</h2>
           <div class="list">
             <button v-for="a in s.alarms" :key="a.id" class="alarm-row" :class="[KINDS[a.kind].cls, {on: s.selAlarm===a.id, off: !a.active}]" @click="s.selAlarm=a.id">
               <span class="tag">{{ KINDS[a.kind].short }}</span><span class="grow">{{ SCOPES[a.scope] }}<template v-if="a.scope!=='all'"> · {{ name(a.scope, a.target_id) }}</template></span>
@@ -135,7 +147,7 @@
 
         <!-- STRUCTURE -->
         <template v-if="s.tab==='structure'">
-          <div class="row"><h2>القطاعات · Zones · المباني</h2><button class="btn sm primary" @click="newItem('sector')">+ قطاع</button></div>
+          <div class="row"><h2 class="sec">القطاعات · Zones · المباني</h2><button class="btn sm primary" @click="newItem('sector')">+ قطاع</button></div>
           <div v-if="s.edit" class="editor">
             <h3>{{ s.edit.id ? 'تعديل' : 'إضافة' }} {{ {sector:'قطاع', zone:'Zone', building:'مبنى'}[s.edit.type] }}</h3>
             <label for="nm">الاسم</label><input id="nm" v-model="s.edit.name">
@@ -175,7 +187,7 @@
 
         <!-- PEOPLE -->
         <template v-if="s.tab==='people'">
-          <div class="row"><h2>الموظفون</h2><button class="btn sm primary" @click="newPerson">+ حساب موظف</button></div>
+          <div class="row"><h2 class="sec">الموظفون</h2><button class="btn sm primary" @click="newPerson">+ حساب موظف</button></div>
           <form v-if="s.pf" class="editor grid3" @submit.prevent="savePerson">
             <div><label for="pfn">الاسم الكامل</label><input id="pfn" v-model="s.pf.full_name"></div>
             <div><label for="pfe">الرقم الوظيفي</label><input id="pfe" v-model="s.pf.employee_no"></div>
@@ -200,7 +212,7 @@
 
         <!-- REPORTS -->
         <template v-if="s.tab==='reports'">
-          <div class="row"><h2>بلاغات 160 المشفرة</h2>
+          <div class="row"><h2 class="sec">بلاغات 160 المشفرة</h2>
             <form v-if="!s.privKey && s.hasKey" class="row gap8" @submit.prevent="unlockKey"><input type="password" v-model="s.pass" placeholder="عبارة مرور المفتاح" aria-label="عبارة مرور المفتاح"><button class="btn sm primary">فتح المفتاح</button></form>
             <span v-else-if="s.privKey" class="chip ok">المفتاح مفتوح لهذه الجلسة</span>
           </div>
@@ -225,7 +237,7 @@
 
         <!-- KEYS -->
         <template v-if="s.tab==='keys'">
-          <h2>مفتاح تشفير البلاغات</h2>
+          <h2 class="sec">مفتاح تشفير البلاغات</h2>
           <p class="prose">يشفّر تطبيق الموظف كل بلاغ وصوره على الهاتف نفسه (AES-256-GCM) قبل الإرسال، ويغلّف مفتاح البلاغ بالمفتاح العام لفريق ORT (RSA-OAEP 2048). لا يستطيع أحد غير حامل عبارة المرور قراءة البلاغات — ولا حتى مدير قاعدة البيانات. تُحذف الصور من الهاتف بعد الإرسال.</p>
           <p v-if="s.hasKey" class="chip ok">يوجد مفتاح فعّال · {{ fmt(s.keyRow.updated_at) }}</p>
           <div class="editor">
@@ -244,6 +256,7 @@
       </div>
     </div>
 
+    </div>
     <!-- Call overlay -->
     <div v-if="s.call" class="call" role="dialog" aria-label="مكالمة صوتية">
       <div class="pulse" :class="s.callState"></div>

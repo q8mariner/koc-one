@@ -21,7 +21,7 @@ perms = [
 ]
 block = "\n".join(f'    <uses-permission android:name="android.permission.{p}"/>' for p in perms if f"permission.{p}\"" not in m)
 m = m.replace("<application", block + "\n    <application", 1)
-m = re.sub(r'android:label="[^"]*"', 'android:label="KOC ONE"', m, count=1)
+m = re.sub(r'android:label="[^"]*"', 'android:label="ONE"', m, count=1)
 if "showWhenLocked" not in m:
     m = m.replace('android:name=".MainActivity"', 'android:name=".MainActivity"\n            android:showWhenLocked="true"\n            android:turnScreenOn="true"', 1)
 manifest.write_text(m)

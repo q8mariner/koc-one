@@ -9,12 +9,10 @@ import 'screens/home.dart';
 import 'screens/login.dart';
 import 'services/live.dart';
 import 'services/notify.dart';
+import 'ui.dart';
 
 final navKey = GlobalKey<NavigatorState>();
 
-const navy = Color(0xFF0B1220);
-const panel = Color(0xFF111A2E);
-const sky = Color(0xFF38BDF8);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,9 +62,8 @@ class KocOneApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = ColorScheme.fromSeed(seedColor: sky, brightness: Brightness.dark, surface: panel);
     return MaterialApp(
-      title: 'KOC ONE',
+      title: 'ONE',
       navigatorKey: navKey,
       debugShowCheckedModeBanner: false,
       locale: const Locale('ar'),
@@ -76,13 +73,7 @@ class KocOneApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: ThemeData(
-        colorScheme: scheme,
-        scaffoldBackgroundColor: navy,
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(backgroundColor: navy, centerTitle: false),
-        inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder(), filled: true, fillColor: panel),
-      ),
+      theme: oneTheme(),
       home: const AuthGate(),
     );
   }

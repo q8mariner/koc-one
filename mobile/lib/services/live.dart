@@ -306,7 +306,7 @@ class LiveService extends ChangeNotifier {
       distanceFilter: 15,
       intervalDuration: const Duration(seconds: 20),
       foregroundNotificationConfig: const ForegroundNotificationConfig(
-        notificationTitle: 'KOC ONE · الحماية مفعّلة',
+        notificationTitle: 'ONE · الحماية مفعّلة',
         notificationText: 'يستقبل إنذارات موقعك وتنبيهات الحدود',
         enableWakeLock: true,
       ),

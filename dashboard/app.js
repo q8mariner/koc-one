@@ -17,6 +17,14 @@ const STATUS = {
   received: ["استلم — لم يرد", "st-wait"], safe: ["آمن", "st-ok"], need_help: ["يحتاج مساعدة", "st-warn"],
   injured: ["مصاب", "st-bad"], trapped: ["محتجز", "st-bad"], none: ["لم يستلم", "st-none"],
 };
+const NAV = [
+  { k: "map", t: "الخريطة الحية", tag: "ECC-160 · كل المواقع", h: "صورة واحدة لكل المواقع", i: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zm0 0v14m6-12v14" },
+  { k: "alarms", t: "الإنذارات", tag: "الإنذار والحصر", h: "إطلاق الإنذار ومتابعة الحصر", i: "M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0" },
+  { k: "structure", t: "القطاعات والحدود", tag: "الهيكل وحدود GPS", h: "القطاعات · Zones · المباني", i: "M4 20V8l8-4 8 4v12M9 20v-6h6v6M4 20h16" },
+  { k: "people", t: "الموظفون", tag: "الحسابات", h: "الموظفون وجهات الاتصال", i: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7 8v-1a3 3 0 0 0-2-3m-1-9a3 3 0 0 1 0 6" },
+  { k: "reports", t: "بلاغات 160", tag: "بلاغات مشفرة", h: "بلاغات 160 مع الصور", i: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" },
+  { k: "keys", t: "مفتاح التشفير", tag: "الأمان", h: "مفتاح تشفير البلاغات", i: "M8 15a4 4 0 1 1 3-6.6L21 8v4h-2v2h-2v2h-3l-2.5-2.4A4 4 0 0 1 8 15zm-1-4h.01" },
+];
 const CLASSES = { unclassified: "غير مصنفة", zone2: "Zone 2", zone1: "Zone 1", zone0: "Zone 0" };
 const REPORT_TYPES = { fire: "حريق", leak: "تسرب غاز/نفط", injury: "إصابة", road: "حادث طريق", suspicious: "نشاط مشبوه", hazard: "خطر سلامة", sos: "نداء استغاثة" };
 const REPORT_STATUS = { new: "جديد", received: "استلمه ORT", dispatched: "أُحيل للفرق", closed: "مغلق" };
@@ -111,19 +119,19 @@ createApp({
     function drawAreas() {
       if (!layers) return; layers.clearLayers();
       s.sectors.forEach((x) => { const p = poly(x.boundary, { color: x.color, weight: 2, fillOpacity: 0.05, dashArray: "6 6" }); p && p.bindTooltip("قطاع: " + x.name).addTo(layers); });
-      s.zones.forEach((x) => { const sec = byId(s.sectors, x.sector_id); const p = poly(x.boundary, { color: x.classification === "unclassified" ? (sec?.color || "#38bdf8") : "#f97316", weight: 2, fillOpacity: 0.1 }); p && p.bindTooltip(`${x.name} · ${CLASSES[x.classification]}`).addTo(layers); });
-      s.buildings.forEach((x) => { const p = poly(x.boundary, { color: "#e2e8f0", weight: 1.5, fillOpacity: 0.25 }); p && p.bindTooltip("مبنى: " + x.name, { permanent: false }).addTo(layers); });
+      s.zones.forEach((x) => { const sec = byId(s.sectors, x.sector_id); const p = poly(x.boundary, { color: x.classification === "unclassified" ? (sec?.color || "#2B4C9B") : "#E07B29", weight: 2, fillOpacity: 0.1 }); p && p.bindTooltip(`${x.name} · ${CLASSES[x.classification]}`).addTo(layers); });
+      s.buildings.forEach((x) => { const p = poly(x.boundary, { color: "#1F3A7A", weight: 2, fillColor: "#2B4C9B", fillOpacity: 0.18 }); p && p.bindTooltip("مبنى: " + x.name, { permanent: false }).addTo(layers); });
     }
     function statusFor(uid) {
       const a = s.alarms.find((x) => x.active && x.id === s.selAlarm) || s.alarms.find((x) => x.active);
       if (!a) return null; const k = s.acks.find((x) => x.alarm_id === a.id && x.user_id === uid); return k ? k.status : null;
     }
-    const STATUS_COLOR = { safe: "#22c55e", received: "#facc15", need_help: "#fb923c", injured: "#ef4444", trapped: "#ef4444" };
+    const STATUS_COLOR = { safe: "#2E9E5B", received: "#E5B80B", need_help: "#E07B29", injured: "#C62828", trapped: "#C62828" };
     function drawPeople() {
       if (!peopleLayer) return; peopleLayer.clearLayers();
       s.people.filter((p) => p.last_lat && p.role !== "ort").forEach((p) => {
         const st = statusFor(p.id);
-        L.circleMarker([p.last_lat, p.last_lng], { radius: 7, color: "#0b1220", weight: 2, fillColor: STATUS_COLOR[st] || (p.online ? "#38bdf8" : "#64748b"), fillOpacity: 1 })
+        L.circleMarker([p.last_lat, p.last_lng], { radius: 7, color: "#ffffff", weight: 2, fillColor: STATUS_COLOR[st] || (p.online ? "#2B4C9B" : "#94A3B8"), fillOpacity: 1 })
           .bindPopup(`<b>${esc(p.full_name)}</b><br>${esc(p.employee_no || "")} · فصيلة ${esc(p.blood_type || "—")}<br>${esc(name("building", p.cur_building_id))} · آخر ظهور ${ago(p.last_seen)}<br>
             ${st ? "الحالة: " + STATUS[st][0] + "<br>" : ""}<button class="mini" onclick="window.__kocCall('${p.id}')">اتصال صوتي</button>`)
           .addTo(peopleLayer);
@@ -141,7 +149,7 @@ createApp({
 
     // ───── Structure editor ─────
     function newItem(type, parent = "") {
-      s.edit = { type, id: null, name: "", parent, color: "#0e7490", classification: "unclassified", code: "", muster_point: "", entry_message: "", boundary: null, coordsText: "" };
+      s.edit = { type, id: null, name: "", parent, color: "#2B4C9B", classification: "unclassified", code: "", muster_point: "", entry_message: "", boundary: null, coordsText: "" };
       drawLayer && drawLayer.clearLayers();
     }
     function editItem(type, x) {
@@ -149,7 +157,7 @@ createApp({
         code: x.code || "", muster_point: x.muster_point || "", entry_message: x.entry_message || "", boundary: x.boundary, coordsText: (x.boundary || []).map((p) => p.join(", ")).join("\n") };
       focus(x); drawEditPreview();
     }
-    function startDraw() { s.drawing = true; map.pm.enableDraw("Polygon", { snappable: true, templineStyle: { color: "#facc15" }, pathOptions: { color: "#facc15" } }); }
+    function startDraw() { s.drawing = true; map.pm.enableDraw("Polygon", { snappable: true, templineStyle: { color: "#E5B80B" }, pathOptions: { color: "#E5B80B" } }); }
     function cancelDraw() { s.drawing = false; map.pm.disableDraw(); }
     function parseCoords() {
       const pts = s.edit.coordsText.split(/\n+/).map((l) => l.split(/[,\s]+/).filter(Boolean).map(Number)).filter((p) => p.length === 2 && p.every((n) => !isNaN(n)));
@@ -163,7 +171,7 @@ createApp({
         s.edit.coordsText = (s.edit.coordsText ? s.edit.coordsText + "\n" : "") + line; toast("أُضيفت نقطة GPS · الدقة " + Math.round(p.coords.accuracy) + " م");
       }, () => toast("تعذّر قراءة GPS"), { enableHighAccuracy: true });
     }
-    function drawEditPreview() { drawLayer.clearLayers(); const p = poly(s.edit?.boundary, { color: "#facc15", weight: 3, fillOpacity: 0.15 }); p && p.addTo(drawLayer); }
+    function drawEditPreview() { drawLayer.clearLayers(); const p = poly(s.edit?.boundary, { color: "#E5B80B", weight: 3, fillOpacity: 0.2 }); p && p.addTo(drawLayer); }
     async function saveItem() {
       const e = s.edit; if (!e.name.trim()) return toast("اكتب الاسم أولًا");
       const table = { sector: "sectors", zone: "zones", building: "buildings" }[e.type];
@@ -305,7 +313,7 @@ createApp({
       setInterval(() => { s._tick = Date.now(); }, 30000);
     });
 
-    return { s, KINDS, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
+    return { s, NAV, KINDS, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
       newItem, editItem, startDraw, cancelDraw, parseCoords, useMyGps, saveItem, deleteItem, focus, fitAll,
       targets, setKind, reach, launch, closeAlarm, alarmRoster, counts, selAlarmObj, activeAlarms,
       newPerson, savePerson, updatePerson, callPerson, hangup, toggleMute,

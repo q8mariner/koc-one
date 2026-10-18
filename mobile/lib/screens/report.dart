@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/live.dart';
 import '../services/secure_report.dart';
+import '../ui.dart';
 
 const reportTypes = {
   'fire': ('حريق', Icons.local_fire_department),
@@ -104,31 +105,69 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     final live = LiveService.I;
     return Scaffold(
-      appBar: AppBar(title: const Text('بلاغ إلى 160')),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
-        const Text('نوع البلاغ', style: TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final e in reportTypes.entries)
-            ChoiceChip(
-              avatar: Icon(e.value.$2, size: 18),
-              label: Text(e.value.$1),
-              selected: _type == e.key,
-              onSelected: (_) => setState(() => _type = e.key),
+      appBar: AppBar(title: const Text('بلاغ إلى 160', style: TextStyle(fontWeight: FontWeight.w800))),
+      body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 24), children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: C.bad, borderRadius: BorderRadius.circular(16)),
+          child: const Row(children: [
+            Text('160', style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
+            SizedBox(width: 14),
+            Expanded(
+              child: Text('يصل بلاغك مباشرة إلى فريق ORT في مركز 160، مشفّرًا من هاتفك.',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.4)),
             ),
-        ]),
-        const SizedBox(height: 16),
-        Card(child: ListTile(leading: const Icon(Icons.my_location), title: Text(live.areaLabel()), subtitle: Text(live.pos == null ? 'الموقع غير متاح' : 'يُرفق الموقع تلقائيًا'))),
-        const SizedBox(height: 12),
+          ]),
+        ),
+        const SectionTitle('نوع البلاغ'),
+        GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 1.15,
+          children: [
+            for (final e in reportTypes.entries)
+              Material(
+                color: _type == e.key ? C.navy : Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: _type == e.key ? C.navy : C.line)),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => setState(() => _type = e.key),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(e.value.$2, color: _type == e.key ? Colors.white : (e.key == 'sos' || e.key == 'fire' ? C.bad : C.navy), size: 28),
+                    const SizedBox(height: 6),
+                    Text(e.value.$1, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: _type == e.key ? Colors.white : C.fg)),
+                  ]),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        OneCard(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(children: [
+            const Icon(Icons.my_location, color: C.navy),
+            const SizedBox(width: 10),
+            Expanded(child: Text(live.areaLabel(), style: const TextStyle(fontWeight: FontWeight.w700, color: C.fg))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: const Color(0xFFE6F4EC), borderRadius: BorderRadius.circular(10)),
+              child: Text(live.pos == null ? 'غير متاح' : 'تلقائي', style: const TextStyle(color: Color(0xFF1F7A45), fontWeight: FontWeight.w700, fontSize: 12)),
+            ),
+          ]),
+        ),
         TextField(controller: _desc, maxLines: 4, decoration: const InputDecoration(labelText: 'ماذا ترى؟ (اختياري)')),
-        const SizedBox(height: 16),
+        const SizedBox(height: 6),
         Row(children: [
-          Text('صور البلاغ (${_photos.length}/4)', style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SectionTitle('صور البلاغ'),
+          Text('  (${_photos.length}/4)', style: const TextStyle(color: C.muted)),
           const Spacer(),
-          const Icon(Icons.lock, size: 16, color: Color(0xFF22C55E)),
-          const Text(' مشفّرة', style: TextStyle(color: Color(0xFF22C55E))),
+          const Icon(Icons.lock, size: 16, color: C.ok),
+          const Text(' مشفّرة', style: TextStyle(color: C.ok, fontWeight: FontWeight.w700)),
         ]),
-        const SizedBox(height: 8),
         SizedBox(
           height: 96,
           child: ListView(scrollDirection: Axis.horizontal, children: [
@@ -136,25 +175,41 @@ class _ReportScreenState extends State<ReportScreen> {
               Padding(
                 padding: const EdgeInsetsDirectional.only(end: 8),
                 child: Stack(children: [
-                  ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(_photos[i].path), width: 96, height: 96, fit: BoxFit.cover)),
-                  Positioned(top: 0, left: 0, child: IconButton(onPressed: () => setState(() => _photos.removeAt(i)), icon: const Icon(Icons.close, size: 18))),
+                  ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(File(_photos[i].path), width: 96, height: 96, fit: BoxFit.cover)),
+                  Positioned(
+                    top: 4,
+                    left: 4,
+                    child: InkWell(
+                      onTap: () => setState(() => _photos.removeAt(i)),
+                      child: const CircleAvatar(radius: 12, backgroundColor: Colors.black54, child: Icon(Icons.close, size: 14, color: Colors.white)),
+                    ),
+                  ),
                 ]),
               ),
             if (_photos.length < 4)
               InkWell(
                 onTap: _snap,
-                child: Container(width: 96, height: 96, decoration: BoxDecoration(border: Border.all(color: Colors.white30), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.add_a_photo)),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(color: Colors.white, border: Border.all(color: C.navy.withValues(alpha: .35), width: 1.5), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.add_a_photo_outlined, color: C.navy),
+                ),
               ),
           ]),
         ),
-        const Padding(padding: EdgeInsets.only(top: 6), child: Text('تُلتقط بكاميرا التطبيق فقط · لا تُحفظ في المعرض · تُرسل إلى 160 فقط', style: TextStyle(color: Colors.white54, fontSize: 12))),
-        if (_err != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_err!, style: const TextStyle(color: Color(0xFFFCA5A5)))),
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text('تُلتقط بكاميرا التطبيق فقط · لا تُحفظ في المعرض · تُرسل إلى 160 فقط', style: TextStyle(color: C.muted, fontSize: 12)),
+        ),
+        if (_err != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_err!, style: const TextStyle(color: C.bad))),
         const SizedBox(height: 20),
         FilledButton.icon(
           onPressed: _sending ? null : _send,
           icon: const Icon(Icons.send),
           label: Text(_sending ? 'جارٍ التشفير والإرسال…' : 'إرسال البلاغ إلى 160'),
-          style: FilledButton.styleFrom(padding: const EdgeInsets.all(16), backgroundColor: const Color(0xFFF59E0B), foregroundColor: Colors.black),
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56), backgroundColor: C.bad, foregroundColor: Colors.white),
         ),
       ]),
     );

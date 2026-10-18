@@ -7,15 +7,11 @@ import '../config.dart';
 import '../services/live.dart';
 import '../services/native_alarm.dart';
 import '../services/notify.dart';
+import '../ui.dart';
 import 'alarm.dart';
 import 'report.dart';
 
-const kindColor = {
-  'signal1': Color(0xFFF59E0B),
-  'signal2': Color(0xFFEF4444),
-  'signal3': Color(0xFF22C55E),
-  'message': Color(0xFF38BDF8),
-};
+const kindColor = {'signal1': C.sig1, 'signal2': C.sig2, 'signal3': C.sig3, 'message': C.navy};
 const kindLabel = {'signal1': 'الإشارة 1 · طوارئ', 'signal2': 'الإشارة 2 · إخلاء', 'signal3': 'الإشارة 3 · زوال الخطر', 'message': 'تنبيه'};
 const statusLabel = {'received': 'استُلم', 'safe': 'آمن', 'need_help': 'يحتاج مساعدة', 'injured': 'مصاب', 'trapped': 'محتجز'};
 
@@ -84,24 +80,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _alarmSetup() {
-    Widget row(String title, String sub, bool done, Future<void> Function() open) => ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Icon(done ? Icons.check_circle : Icons.error, color: done ? const Color(0xFF22C55E) : const Color(0xFFF59E0B)),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: Text(sub),
-          trailing: done ? null : FilledButton(onPressed: open, child: const Text('تفعيل')),
+    Widget row(String title, String sub, bool done, Future<void> Function() open) => Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Row(children: [
+            Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, color: done ? C.ok : C.warn),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w700, color: C.fg)),
+                Text(sub, style: const TextStyle(color: C.muted, fontSize: 12)),
+              ]),
+            ),
+            if (!done) FilledButton(onPressed: open, style: FilledButton.styleFrom(visualDensity: VisualDensity.compact), child: const Text('تفعيل')),
+          ]),
         );
-    return Card(
-      color: const Color(0xFF3B2F05),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('أكمل تجهيز الإنذار ليخترق كل أوضاع الهاتف', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-          row('تجاوز «عدم الإزعاج»', 'يُسمع الإنذار حتى في وضع عدم الإزعاج', _native['dnd']!, NativeAlarm.openDnd),
-          row('الظهور فوق التطبيقات', 'يقطع الإنذار أي تطبيق مفتوح ويظهر فوقه', _native['overlay']!, NativeAlarm.openOverlay),
-          row('إشعارات ملء الشاشة', 'يُضيء الشاشة ويظهر فوق قفلها', _native['fullScreen']!, NativeAlarm.openFullScreen),
-        ]),
-      ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(16), border: Border.all(color: C.yellow, width: 1.5)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('أكمل تجهيز الإنذار ليخترق كل أوضاع الهاتف', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF6B5200))),
+        row('تجاوز «عدم الإزعاج»', 'يُسمع الإنذار حتى في وضع عدم الإزعاج', _native['dnd']!, NativeAlarm.openDnd),
+        row('الظهور فوق التطبيقات', 'يقطع الإنذار أي تطبيق مفتوح ويظهر فوقه', _native['overlay']!, NativeAlarm.openOverlay),
+        row('إشعارات ملء الشاشة', 'يُضيء الشاشة ويظهر فوق قفلها', _native['fullScreen']!, NativeAlarm.openFullScreen),
+      ]),
     );
   }
 
@@ -122,9 +124,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final cls = live.zoneClass();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('KOC ONE', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+        title: const Wordmark(size: 26),
         actions: [
           PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: C.navy),
             onSelected: (v) => v == 'out' ? _logout() : _askPerms(),
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'perm', child: Text('مراجعة الأذونات')),
@@ -135,70 +138,130 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       body: RefreshIndicator(
         onRefresh: () async => _checkPerms(),
-        child: ListView(padding: const EdgeInsets.all(16), children: [
-          if (_startErr != null) _banner(_startErr!, const Color(0xFF3A1216), action: TextButton(onPressed: () { setState(() => _startErr = null); _boot(); }, child: const Text('إعادة'))),
+        child: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 24), children: [
+          if (_startErr != null) _banner(_startErr!, C.bad, action: TextButton(onPressed: () { setState(() => _startErr = null); _boot(); }, child: const Text('إعادة'))),
           if (!_permsOk)
-            _banner('الإنذارات تحتاج إذن الإشعارات والموقع (يُفضّل «السماح طوال الوقت») لتصلك والهاتف مقفل.', const Color(0xFF3B2F05),
+            _banner('الإنذارات تحتاج إذن الإشعارات والموقع («السماح طوال الوقت») لتصلك والهاتف مقفل.', C.warn,
                 action: TextButton(onPressed: openAppSettings, child: const Text('الإعدادات'))),
           if (_native.values.contains(false)) _alarmSetup(),
+
+          // Active alarms
           for (final a in myActive)
-            Card(
-              color: kindColor[a['kind']]!.withValues(alpha: .18),
-              shape: RoundedRectangleBorder(side: BorderSide(color: kindColor[a['kind']]!, width: 1.5), borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                leading: Icon(Icons.campaign, color: kindColor[a['kind']]),
-                title: Text(a['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text('حالتك: ${statusLabel[live.myStatus[a['id']]] ?? 'لم تُسجّل'} — اضغط لتحديثها'),
-                onTap: () => Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: '/alarm'), builder: (_) => AlarmScreen(alarm: a))),
-              ),
-            ),
-          // Where am I
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(me?['full_name'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                Text('رقم ${me?['employee_no'] ?? '—'} · فصيلة الدم ${me?['blood_type'] ?? '—'}', style: const TextStyle(color: Colors.white60)),
-                const Divider(height: 24),
-                Row(children: [
-                  Icon(live.where.insideAny ? Icons.shield : Icons.location_off, color: live.where.insideAny ? const Color(0xFF22C55E) : Colors.white38),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(live.areaLabel(), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
-                  if (cls != null && cls != 'unclassified') Chip(label: Text(cls.toUpperCase().replaceAll('ZONE', 'Zone ')), backgroundColor: const Color(0xFF3A1D06)),
-                ]),
-                if (live.musterPoint() != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text('نقطة التجمع: ${live.musterPoint()}')),
-                const SizedBox(height: 4),
-                Text(live.gpsState, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            OneCard(
+              color: kindColor[a['kind']],
+              onTap: () => Navigator.push(context, MaterialPageRoute(settings: const RouteSettings(name: '/alarm'), builder: (_) => AlarmScreen(alarm: a))),
+              child: Row(children: [
+                const Icon(Icons.campaign, color: Colors.white, size: 30),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(a['title'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                    Text('حالتك: ${statusLabel[live.myStatus[a['id']]] ?? 'لم تُسجّل'} — اضغط لتحديثها', style: const TextStyle(color: Colors.white70)),
+                  ]),
+                ),
+                const Icon(Icons.chevron_left, color: Colors.white),
               ]),
             ),
+
+          // Identity + location (the "digital ID" card)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(color: C.navy, borderRadius: BorderRadius.circular(18)),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(children: [
+              const Positioned.fill(child: Opacity(opacity: .35, child: Stripes())),
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: Text(me?['full_name'] ?? '', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800))),
+                    if (me?['blood_type'] != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: C.bad, borderRadius: BorderRadius.circular(20)),
+                        child: Text('${me?['blood_type']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                      ),
+                  ]),
+                  Text('الرقم الوظيفي ${me?['employee_no'] ?? '—'}', style: const TextStyle(color: Colors.white70)),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                    child: Row(children: [
+                      Icon(live.where.insideAny ? Icons.shield : Icons.location_off, color: live.where.insideAny ? C.ok : C.muted),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(live.areaLabel(), style: const TextStyle(fontWeight: FontWeight.w700, color: C.fg)),
+                          if (live.musterPoint() != null) Text('نقطة التجمع: ${live.musterPoint()}', style: const TextStyle(color: C.muted, fontSize: 12)),
+                          Text(live.gpsState, style: const TextStyle(color: C.muted, fontSize: 11)),
+                        ]),
+                      ),
+                      if (cls != null && cls != 'unclassified')
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: const Color(0xFFFDE6D3), borderRadius: BorderRadius.circular(10)),
+                          child: Text(cls.toUpperCase().replaceAll('ZONE', 'Zone '), style: const TextStyle(color: Color(0xFFA4501A), fontWeight: FontWeight.w700, fontSize: 12)),
+                        ),
+                    ]),
+                  ),
+                ]),
+              ),
+            ]),
           ),
-          const SizedBox(height: 8),
+
+          // Actions
           Row(children: [
-            Expanded(child: _bigButton(Icons.report, 'بلاغ إلى 160', 'مع صور مشفرة', const Color(0xFFF59E0B), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportScreen())))),
+            Expanded(child: _action(Icons.report_gmailerrorred, 'بلاغ إلى 160', 'مع صور مشفرة', C.warn, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportScreen())))),
             const SizedBox(width: 10),
-            Expanded(child: _bigButton(Icons.phone_in_talk, 'اتصال 160', 'مركز الطوارئ', const Color(0xFFEF4444), _call160)),
+            Expanded(child: _action(Icons.phone_in_talk, 'اتصال 160', 'موقعك يُرسل تلقائيًا', C.bad, _call160)),
           ]),
           const SizedBox(height: 10),
-          _bigButton(Icons.sos, 'أحتاج مساعدة الآن', 'يرسل موقعك إلى ORT فورًا', const Color(0xFFDC2626), () {
-            if (myActive.isNotEmpty) {
-              live.ack(myActive.first['id'], 'need_help');
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('سُجّلت حالتك: يحتاج مساعدة — سيتواصل معك الفريق')));
-            } else {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportScreen(initialType: 'sos')));
-            }
-          }),
-          const SizedBox(height: 20),
-          const Text('الإنذارات والتنبيهات', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          const SizedBox(height: 6),
-          if (live.inbox.isEmpty) const Padding(padding: EdgeInsets.all(12), child: Text('لا توجد إنذارات. ستصلك هنا إنذارات المنطقة التي تتواجد داخل حدودها.', style: TextStyle(color: Colors.white54))),
+          OneCard(
+            color: C.bad,
+            onTap: () {
+              if (myActive.isNotEmpty) {
+                live.ack(myActive.first['id'], 'need_help');
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('سُجّلت حالتك: يحتاج مساعدة — سيتواصل معك الفريق')));
+              } else {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportScreen(initialType: 'sos')));
+              }
+            },
+            child: const Row(children: [
+              Icon(Icons.sos, color: Colors.white, size: 32),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('أحتاج مساعدة الآن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                  Text('يرسل حالتك وموقعك إلى ORT فورًا', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                ]),
+              ),
+            ]),
+          ),
+
+          const SectionTitle('الإنذارات والتنبيهات'),
+          if (live.inbox.isEmpty)
+            const OneCard(child: Text('لا توجد إنذارات. تصلك هنا إنذارات المنطقة التي تتواجد داخل حدودها.', style: TextStyle(color: C.muted))),
           for (final a in live.inbox)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(radius: 6, backgroundColor: kindColor[a['kind']] ?? Colors.grey),
-              title: Text(a['title'] ?? ''),
-              subtitle: Text('${kindLabel[a['kind']] ?? ''}${a['drill'] == true ? ' · تمرين' : ''}${live.myStatus[a['id']] != null ? ' · ${statusLabel[live.myStatus[a['id']]]}' : ''}'),
-              trailing: Text(_time(a['created_at']), style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              onTap: () => showModalBottomSheet(context: context, builder: (_) => Padding(padding: const EdgeInsets.all(20), child: Text('${a['title']}\n\n${a['body'] ?? ''}', style: const TextStyle(fontSize: 16)))),
+            OneCard(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              onTap: () => showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.white,
+                builder: (_) => Padding(padding: const EdgeInsets.all(20), child: Text('${a['title']}\n\n${a['body'] ?? ''}', style: const TextStyle(fontSize: 16))),
+              ),
+              child: Row(children: [
+                Container(width: 10, height: 40, decoration: BoxDecoration(color: kindColor[a['kind']] ?? C.muted, borderRadius: BorderRadius.circular(4))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(a['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w700, color: C.fg)),
+                    Text('${kindLabel[a['kind']] ?? ''}${a['drill'] == true ? ' · تمرين' : ''}${live.myStatus[a['id']] != null ? ' · ${statusLabel[live.myStatus[a['id']]]}' : ''}',
+                        style: const TextStyle(color: C.muted, fontSize: 12)),
+                  ]),
+                ),
+                Text(_time(a['created_at']), style: const TextStyle(color: C.muted, fontSize: 12)),
+              ]),
             ),
         ]),
       ),
@@ -211,28 +274,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 
-  Widget _banner(String text, Color bg, {Widget? action}) => Card(
-        color: bg,
-        child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [Expanded(child: Text(text)), if (action != null) action])),
+  Widget _banner(String text, Color c, {Widget? action}) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: c.withValues(alpha: .1), borderRadius: BorderRadius.circular(14), border: Border.all(color: c.withValues(alpha: .5))),
+        child: Row(children: [Expanded(child: Text(text, style: const TextStyle(color: C.fg))), if (action != null) action]),
       );
 
-  Widget _bigButton(IconData icon, String title, String sub, Color c, VoidCallback onTap) => Material(
-        color: c.withValues(alpha: .15),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: c.withValues(alpha: .6))),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(children: [
-              Icon(icon, color: c, size: 30),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                Text(sub, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-              ])),
-            ]),
-          ),
-        ),
+  Widget _action(IconData icon, String title, String sub, Color c, VoidCallback onTap) => OneCard(
+        onTap: onTap,
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          CircleAvatar(radius: 22, backgroundColor: c.withValues(alpha: .12), child: Icon(icon, color: c)),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: C.navy)),
+          Text(sub, style: const TextStyle(color: C.muted, fontSize: 12)),
+        ]),
       );
 }

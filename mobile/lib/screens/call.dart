@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/call.dart';
+import '../ui.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final Map<String, dynamic> call;
@@ -54,14 +55,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     final ringing = _state == 'ringing';
     final mm = (_secs ~/ 60).toString().padLeft(2, '0'), ss = (_secs % 60).toString().padLeft(2, '0');
     return Scaffold(
+      backgroundColor: C.navy,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(children: [
             const Spacer(),
-            const CircleAvatar(radius: 48, backgroundColor: Color(0xFF38BDF8), child: Icon(Icons.support_agent, size: 52, color: Color(0xFF04263A))),
+            const CircleAvatar(radius: 52, backgroundColor: C.yellow, child: Icon(Icons.support_agent, size: 56, color: C.navy)),
             const SizedBox(height: 20),
-            Text(widget.call['caller_name'] ?? 'ORT · 160', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+            Text(widget.call['caller_name'] ?? 'ORT · 160', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
             const SizedBox(height: 6),
             Text(_state == 'connected' ? '$mm:$ss' : _labels[_state] ?? _state, style: const TextStyle(color: Colors.white70, fontSize: 16)),
             const Spacer(),
@@ -88,6 +90,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   Widget _round(IconData i, Color c, String label, VoidCallback onTap) => Column(children: [
         FloatingActionButton.large(heroTag: label, backgroundColor: c, onPressed: onTap, child: Icon(i, color: Colors.white)),
         const SizedBox(height: 8),
-        Text(label),
+        Text(label, style: const TextStyle(color: Colors.white)),
       ]);
 }

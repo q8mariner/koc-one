@@ -1,4 +1,4 @@
-// KOC ONE · connection settings (publishable key; data is protected by Row Level Security).
+// ONE · connection settings (publishable key; data is protected by Row Level Security).
 const supabaseUrl = 'https://jrtpdchuephpkhshdzec.supabase.co';
 const supabaseKey = 'sb_publishable_iNYynnynGIp0jmV2kodkLg_zUSI0ozW';
 
