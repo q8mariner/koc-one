@@ -92,9 +92,9 @@ class MainActivity : FlutterActivity() {
         val dnd = nm.isNotificationPolicyAccessGranted
         val suffix = if (dnd) "dnd" else "std"
         val labels = mapOf(
-            "signal1" to "الإشارة 1 · طوارئ",
-            "signal2" to "الإشارة 2 · إخلاء",
-            "signal3" to "الإشارة 3 · زوال الخطر",
+            "signal1" to "Signal 1 · Emergency · الإشارة 1",
+            "signal2" to "Signal 2 · Evacuate · الإشارة 2",
+            "signal3" to "Signal 3 · All clear · الإشارة 3",
         )
         for ((kind, label) in labels) {
             val id = "koc_${kind}_$suffix"

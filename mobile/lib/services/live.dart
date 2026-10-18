@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../geo.dart';
+import '../i18n.dart';
 import 'native_alarm.dart';
 import 'notify.dart';
 
@@ -22,7 +23,7 @@ class LiveService extends ChangeNotifier {
   Areas areas = Areas([], [], []);
   Position3 where = const Position3(null, null, null);
   Position? pos;
-  String gpsState = 'جارٍ تحديد الموقع…';
+  String gpsState = tr('جارٍ تحديد الموقع…', 'Locating…');
 
   final List<Map<String, dynamic>> inbox = []; // alarms/messages that reached me
   final Map<String, String> myStatus = {}; // alarmId → status
@@ -240,8 +241,8 @@ class LiveService extends ChangeNotifier {
     _handled.add(id);
     inbox.insert(0, a);
     final kind = a['kind'] as String;
-    final drill = a['drill'] == true ? ' (تمرين)' : '';
-    Notify.alarm(id, kind, '${a['title']}$drill', '${areaLabel()}\n${a['body'] ?? ''}');
+    final drill = a['drill'] == true ? tr(' (تمرين)', ' (drill)') : '';
+    Notify.alarm(id, kind, '${alarmTitle(a)}$drill', '${areaLabel()}\n${alarmBody(a)}');
     if (kind != 'message') {
       ack(id, 'received');
       _soundingId = id;
@@ -281,13 +282,13 @@ class LiveService extends ChangeNotifier {
   // ───── Location / boundaries ─────
   Future<bool> locationReady() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
-      gpsState = 'خدمة الموقع مغلقة';
+      gpsState = tr('خدمة الموقع مغلقة', 'Location services are off');
       return false;
     }
     var p = await Geolocator.checkPermission();
     if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
     if (p == LocationPermission.denied || p == LocationPermission.deniedForever) {
-      gpsState = 'لم يُمنح إذن الموقع';
+      gpsState = tr('لم يُمنح إذن الموقع', 'Location permission not granted');
       return false;
     }
     return true;
@@ -305,21 +306,21 @@ class LiveService extends ChangeNotifier {
       accuracy: LocationAccuracy.high,
       distanceFilter: 15,
       intervalDuration: const Duration(seconds: 20),
-      foregroundNotificationConfig: const ForegroundNotificationConfig(
-        notificationTitle: 'ONE · الحماية مفعّلة',
-        notificationText: 'يستقبل إنذارات موقعك وتنبيهات الحدود',
+      foregroundNotificationConfig: ForegroundNotificationConfig(
+        notificationTitle: tr('ONE · الحماية مفعّلة', 'ONE · protection on'),
+        notificationText: tr('يستقبل إنذارات موقعك وتنبيهات الحدود', 'Receiving alarms and boundary alerts for your location'),
         enableWakeLock: true,
       ),
     );
     _posSub = Geolocator.getPositionStream(locationSettings: settings).listen(_onPosition, onError: (_) {
-      gpsState = 'تعذّر قراءة الموقع';
+      gpsState = tr('تعذّر قراءة الموقع', 'Couldn’t read location');
       notifyListeners();
     });
   }
 
   void _onPosition(Position p) {
     pos = p;
-    gpsState = 'GPS · دقة ${p.accuracy.round()} م';
+    gpsState = tr('GPS · دقة ${p.accuracy.round()} م', 'GPS · accuracy ${p.accuracy.round()} m');
     final next = areas.locate(p.latitude, p.longitude);
     final prev = where;
     final changed = next.sectorId != prev.sectorId || next.zoneId != prev.zoneId || next.buildingId != prev.buildingId;
@@ -344,7 +345,7 @@ class LiveService extends ChangeNotifier {
     if (from != null) {
       _logEvent(type, from, 'exit');
       final a = lookup(from);
-      if (a != null && type != 'building') Notify.message('exit-$from', 'غادرت حدود ${a['name']}', 'لن تصلك إنذارات هذه المنطقة حتى تعود إليها.');
+      if (a != null && type != 'building') Notify.message('exit-$from', tr('غادرت حدود ', 'You left ') + '${a['name']}', tr('لن تصلك إنذارات هذه المنطقة حتى تعود إليها.', 'You won’t get this area’s alarms until you return.'));
     }
     if (to != null) {
       _logEvent(type, to, 'enter');
@@ -352,8 +353,8 @@ class LiveService extends ChangeNotifier {
       if (a != null) {
         final cls = type == 'zone' ? _clsLabel(a['classification']) : '';
         final msg = (a['entry_message'] as String?)?.trim();
-        Notify.message('enter-$to', 'دخلت حدود ${a['name']}$cls',
-            (msg == null || msg.isEmpty) ? 'تصلك إنذارات هذه المنطقة ما دمت داخلها.' : msg);
+        Notify.message('enter-$to', tr('دخلت حدود ', 'You entered ') + '${a['name']}$cls',
+            (msg == null || msg.isEmpty) ? tr('تصلك إنذارات هذه المنطقة ما دمت داخلها.', 'You’ll get this area’s alarms while you are inside it.') : msg);
       }
     }
   }
@@ -386,7 +387,7 @@ class LiveService extends ChangeNotifier {
       if (areas.zone(where.zoneId) != null) areas.zone(where.zoneId)!['name'],
       if (areas.building(where.buildingId) != null) areas.building(where.buildingId)!['name'],
     ];
-    return parts.isEmpty ? 'خارج حدود مناطق الشركة' : parts.join(' › ');
+    return parts.isEmpty ? tr('خارج حدود المناطق', 'Outside all areas') : parts.join(' › ');
   }
 
   String? musterPoint() => areas.building(where.buildingId)?['muster_point'];

@@ -7,13 +7,12 @@ import '../config.dart';
 import '../services/live.dart';
 import '../services/native_alarm.dart';
 import '../services/notify.dart';
+import '../i18n.dart';
 import '../ui.dart';
 import 'alarm.dart';
 import 'report.dart';
 
 const kindColor = {'signal1': C.sig1, 'signal2': C.sig2, 'signal3': C.sig3, 'message': C.navy};
-const kindLabel = {'signal1': 'الإشارة 1 · طوارئ', 'signal2': 'الإشارة 2 · إخلاء', 'signal3': 'الإشارة 3 · زوال الخطر', 'message': 'تنبيه'};
-const statusLabel = {'received': 'استُلم', 'safe': 'آمن', 'need_help': 'يحتاج مساعدة', 'injured': 'مصاب', 'trapped': 'محتجز'};
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -56,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       await live.start();
     } catch (e) {
-      setState(() => _startErr = 'تعذّر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.');
+      setState(() => _startErr = tr('تعذّر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.', 'Couldn’t reach the server. Check the network and try again.'));
     }
   }
 
@@ -91,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Text(sub, style: const TextStyle(color: C.muted, fontSize: 12)),
               ]),
             ),
-            if (!done) FilledButton(onPressed: open, style: FilledButton.styleFrom(visualDensity: VisualDensity.compact), child: const Text('تفعيل')),
+            if (!done) FilledButton(onPressed: open, style: FilledButton.styleFrom(visualDensity: VisualDensity.compact), child: Text(tr('تفعيل', 'Enable'))),
           ]),
         );
     return Container(
@@ -99,10 +98,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(16), border: Border.all(color: C.yellow, width: 1.5)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('أكمل تجهيز الإنذار ليخترق كل أوضاع الهاتف', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF6B5200))),
-        row('تجاوز «عدم الإزعاج»', 'يُسمع الإنذار حتى في وضع عدم الإزعاج', _native['dnd']!, NativeAlarm.openDnd),
-        row('الظهور فوق التطبيقات', 'يقطع الإنذار أي تطبيق مفتوح ويظهر فوقه', _native['overlay']!, NativeAlarm.openOverlay),
-        row('إشعارات ملء الشاشة', 'يُضيء الشاشة ويظهر فوق قفلها', _native['fullScreen']!, NativeAlarm.openFullScreen),
+        Text(tr('أكمل تجهيز الإنذار ليخترق كل أوضاع الهاتف', 'Finish alarm setup so it breaks through every phone mode'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF6B5200))),
+        row(tr('تجاوز «عدم الإزعاج»', 'Override Do Not Disturb'), tr('يُسمع الإنذار حتى في وضع عدم الإزعاج', 'The alarm sounds even in Do Not Disturb'), _native['dnd']!, NativeAlarm.openDnd),
+        row(tr('الظهور فوق التطبيقات', 'Display over other apps'), tr('يقطع الإنذار أي تطبيق مفتوح ويظهر فوقه', 'The alarm interrupts any open app and shows on top'), _native['overlay']!, NativeAlarm.openOverlay),
+        row(tr('إشعارات ملء الشاشة', 'Full-screen notifications'), tr('يُضيء الشاشة ويظهر فوق قفلها', 'Turns the screen on and shows over the lock screen'), _native['fullScreen']!, NativeAlarm.openFullScreen),
       ]),
     );
   }
@@ -114,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _call160() async {
     final ok = await launchUrl(Uri(scheme: 'tel', path: ecc160Number));
-    if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذّر فتح الاتصال — اطلب 160 يدويًا')));
+    if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('تعذّر فتح الاتصال — اطلب 160 يدويًا', 'Couldn’t open the dialer — call 160 manually'))));
   }
 
   @override
@@ -128,10 +127,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: C.navy),
-            onSelected: (v) => v == 'out' ? _logout() : _askPerms(),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'perm', child: Text('مراجعة الأذونات')),
-              PopupMenuItem(value: 'out', child: Text('تسجيل الخروج')),
+            onSelected: (v) => v == 'out' ? _logout() : (v == 'lang' ? Lang.I.toggle() : _askPerms()),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'lang', child: Text(Lang.I.isEn ? 'العربية' : 'English')),
+              PopupMenuItem(value: 'perm', child: Text(tr('مراجعة الأذونات', 'Review permissions'))),
+              PopupMenuItem(value: 'out', child: Text(tr('تسجيل الخروج', 'Sign out'))),
             ],
           ),
         ],
@@ -139,10 +139,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       body: RefreshIndicator(
         onRefresh: () async => _checkPerms(),
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 24), children: [
-          if (_startErr != null) _banner(_startErr!, C.bad, action: TextButton(onPressed: () { setState(() => _startErr = null); _boot(); }, child: const Text('إعادة'))),
+          if (_startErr != null) _banner(_startErr!, C.bad, action: TextButton(onPressed: () { setState(() => _startErr = null); _boot(); }, child: Text(tr('إعادة', 'Retry')))),
           if (!_permsOk)
-            _banner('الإنذارات تحتاج إذن الإشعارات والموقع («السماح طوال الوقت») لتصلك والهاتف مقفل.', C.warn,
-                action: TextButton(onPressed: openAppSettings, child: const Text('الإعدادات'))),
+            _banner(tr('الإنذارات تحتاج إذن الإشعارات والموقع («السماح طوال الوقت») لتصلك والهاتف مقفل.', 'Alarms need notification and location (“Allow all the time”) permission to reach you while the phone is locked.'), C.warn,
+                action: TextButton(onPressed: openAppSettings, child: Text(tr('الإعدادات', 'Settings')))),
           if (_native.values.contains(false)) _alarmSetup(),
 
           // Active alarms
@@ -155,8 +155,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(a['title'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                    Text('حالتك: ${statusLabel[live.myStatus[a['id']]] ?? 'لم تُسجّل'} — اضغط لتحديثها', style: const TextStyle(color: Colors.white70)),
+                    Text(alarmTitle(a), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                    Text(tr('حالتك: ', 'Your status: ') + (live.myStatus[a['id']] == null ? tr('لم تُسجّل', 'not recorded') : statusLabelOf(live.myStatus[a['id']])) + tr(' — اضغط لتحديثها', ' — tap to update'), style: const TextStyle(color: Colors.white70)),
                   ]),
                 ),
                 const Icon(Icons.chevron_left, color: Colors.white),
@@ -182,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         child: Text('${me?['blood_type']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
                       ),
                   ]),
-                  Text('الرقم الوظيفي ${me?['employee_no'] ?? '—'}', style: const TextStyle(color: Colors.white70)),
+                  Text('${tr('الرقم الوظيفي', 'Employee no.')} ${me?['employee_no'] ?? '—'}', style: const TextStyle(color: Colors.white70)),
                   const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -193,7 +193,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(live.areaLabel(), style: const TextStyle(fontWeight: FontWeight.w700, color: C.fg)),
-                          if (live.musterPoint() != null) Text('نقطة التجمع: ${live.musterPoint()}', style: const TextStyle(color: C.muted, fontSize: 12)),
+                          if (live.musterPoint() != null) Text('${tr('نقطة التجمع', 'Muster point')}: ${live.musterPoint()}', style: const TextStyle(color: C.muted, fontSize: 12)),
                           Text(live.gpsState, style: const TextStyle(color: C.muted, fontSize: 11)),
                         ]),
                       ),
@@ -212,9 +212,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
           // Actions
           Row(children: [
-            Expanded(child: _action(Icons.report_gmailerrorred, 'بلاغ إلى 160', 'مع صور مشفرة', C.warn, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportScreen())))),
+            Expanded(child: _action(Icons.report_gmailerrorred, tr('بلاغ إلى 160', 'Report to 160'), tr('مع صور مشفرة', 'With encrypted photos'), C.warn, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportScreen())))),
             const SizedBox(width: 10),
-            Expanded(child: _action(Icons.phone_in_talk, 'اتصال 160', 'موقعك يُرسل تلقائيًا', C.bad, _call160)),
+            Expanded(child: _action(Icons.phone_in_talk, tr('اتصال 160', 'Call 160'), tr('موقعك يُرسل تلقائيًا', 'Your location is sent'), C.bad, _call160)),
           ]),
           const SizedBox(height: 10),
           OneCard(
@@ -222,41 +222,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             onTap: () {
               if (myActive.isNotEmpty) {
                 live.ack(myActive.first['id'], 'need_help');
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('سُجّلت حالتك: يحتاج مساعدة — سيتواصل معك الفريق')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('سُجّلت حالتك: يحتاج مساعدة — سيتواصل معك الفريق', 'Status recorded: needs help — the team will contact you'))));
               } else {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportScreen(initialType: 'sos')));
               }
             },
-            child: const Row(children: [
-              Icon(Icons.sos, color: Colors.white, size: 32),
-              SizedBox(width: 12),
+            child: Row(children: [
+              const Icon(Icons.sos, color: Colors.white, size: 32),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('أحتاج مساعدة الآن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                  Text('يرسل حالتك وموقعك إلى ORT فورًا', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text(tr('أحتاج مساعدة الآن', 'I need help now'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                  Text(tr('يرسل حالتك وموقعك إلى ORT فورًا', 'Sends your status and location to ORT at once'), style: const TextStyle(color: Colors.white70, fontSize: 12)),
                 ]),
               ),
             ]),
           ),
 
-          const SectionTitle('الإنذارات والتنبيهات'),
+          SectionTitle(tr('الإنذارات والتنبيهات', 'Alarms and alerts')),
           if (live.inbox.isEmpty)
-            const OneCard(child: Text('لا توجد إنذارات. تصلك هنا إنذارات المنطقة التي تتواجد داخل حدودها.', style: TextStyle(color: C.muted))),
+            OneCard(child: Text(tr('لا توجد إنذارات. تصلك هنا إنذارات المنطقة التي تتواجد داخل حدودها.', 'No alarms. Alarms for the area you are inside will appear here.'), style: const TextStyle(color: C.muted))),
           for (final a in live.inbox)
             OneCard(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               onTap: () => showModalBottomSheet(
                 context: context,
                 backgroundColor: Colors.white,
-                builder: (_) => Padding(padding: const EdgeInsets.all(20), child: Text('${a['title']}\n\n${a['body'] ?? ''}', style: const TextStyle(fontSize: 16))),
+                builder: (_) => Padding(padding: const EdgeInsets.all(20), child: Text('${alarmTitle(a)}\n\n${alarmBody(a)}', style: const TextStyle(fontSize: 16))),
               ),
               child: Row(children: [
                 Container(width: 10, height: 40, decoration: BoxDecoration(color: kindColor[a['kind']] ?? C.muted, borderRadius: BorderRadius.circular(4))),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(a['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w700, color: C.fg)),
-                    Text('${kindLabel[a['kind']] ?? ''}${a['drill'] == true ? ' · تمرين' : ''}${live.myStatus[a['id']] != null ? ' · ${statusLabel[live.myStatus[a['id']]]}' : ''}',
+                    Text(alarmTitle(a), style: const TextStyle(fontWeight: FontWeight.w700, color: C.fg)),
+                    Text('${kindLabelOf(a['kind'])}${a['drill'] == true ? tr(' · تمرين', ' · drill') : ''}${live.myStatus[a['id']] != null ? ' · ${statusLabelOf(live.myStatus[a['id']])}' : ''}',
                         style: const TextStyle(color: C.muted, fontSize: 12)),
                   ]),
                 ),

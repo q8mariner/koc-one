@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/call.dart';
+import '../i18n.dart';
 import '../ui.dart';
 
 class IncomingCallScreen extends StatefulWidget {
@@ -20,14 +21,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   Timer? _timer;
   int _secs = 0;
 
-  static const _labels = {
-    'ringing': 'مكالمة صوتية واردة',
-    'connecting': 'جارٍ الاتصال…',
-    'connected': 'متصل',
-    'failed': 'تعذّر الاتصال',
-    'ended': 'انتهت المكالمة',
-    'rejected': 'رُفضت المكالمة',
-  };
+  static Map<String, String> get _labels => {
+        'ringing': tr('مكالمة صوتية واردة', 'Incoming voice call'),
+        'connecting': tr('جارٍ الاتصال…', 'Connecting…'),
+        'connected': tr('متصل', 'Connected'),
+        'failed': tr('تعذّر الاتصال', 'Couldn’t connect'),
+        'ended': tr('انتهت المكالمة', 'Call ended'),
+        'rejected': tr('رُفضت المكالمة', 'Call declined'),
+      };
 
   void _onState(String s) {
     if (!mounted) return;
@@ -69,16 +70,16 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
             const Spacer(),
             if (ringing)
               Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                _round(Icons.call_end, const Color(0xFFEF4444), 'رفض', () => _s.reject()),
-                _round(Icons.call, const Color(0xFF22C55E), 'رد', () => _s.accept().catchError((_) => _onState('failed'))),
+                _round(Icons.call_end, const Color(0xFFEF4444), tr('رفض', 'Decline'), () => _s.reject()),
+                _round(Icons.call, const Color(0xFF22C55E), tr('رد', 'Answer'), () => _s.accept().catchError((_) => _onState('failed'))),
               ])
             else
               Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                _round(_muted ? Icons.mic_off : Icons.mic, Colors.white24, _muted ? 'إلغاء الكتم' : 'كتم', () {
+                _round(_muted ? Icons.mic_off : Icons.mic, Colors.white24, _muted ? tr('إلغاء الكتم', 'Unmute') : tr('كتم', 'Mute'), () {
                   setState(() => _muted = !_muted);
                   _s.mute(_muted);
                 }),
-                _round(Icons.call_end, const Color(0xFFEF4444), 'إنهاء', () => _s.end()),
+                _round(Icons.call_end, const Color(0xFFEF4444), tr('إنهاء', 'Hang up'), () => _s.end()),
               ]),
             const SizedBox(height: 32),
           ]),

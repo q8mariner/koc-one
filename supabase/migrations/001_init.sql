@@ -254,3 +254,6 @@ grant execute on function public.is_ort() to authenticated;
 
 -- Structure tables also stream changes (the app reloads boundaries live)
 alter publication supabase_realtime add table public.sectors, public.zones, public.buildings;
+
+-- English alarm text (the app shows the employee's chosen language)
+alter table public.alarms add column if not exists title_en text, add column if not exists body_en text;

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../i18n.dart';
 import 'native_alarm.dart';
 
 typedef TapHandler = void Function(String? payload);
@@ -13,11 +14,11 @@ class Notify {
   static TapHandler? onTap;
 
   static const _channels = <String, (String, String?)>{
-    'signal1': ('الإشارة 1 · طوارئ', 'signal1'),
-    'signal2': ('الإشارة 2 · إخلاء', 'signal2'),
-    'signal3': ('الإشارة 3 · زوال الخطر', 'signal3'),
-    'koc_msg': ('رسائل وتنبيهات الحدود', null),
-    'koc_call': ('مكالمات ORT', null),
+    'signal1': ('Signal 1 · الإشارة 1', 'signal1'),
+    'signal2': ('Signal 2 · الإشارة 2', 'signal2'),
+    'signal3': ('Signal 3 · الإشارة 3', 'signal3'),
+    'koc_msg': ('Alerts · التنبيهات', null),
+    'koc_call': ('ORT calls · مكالمات ORT', null),
   };
 
   static Future<void> init() async {
@@ -97,8 +98,8 @@ class Notify {
 
   static Future<void> incomingCall(String callId, String caller) => plugin.show(
         _id(callId),
-        'مكالمة من $caller',
-        'اضغط للرد — مركز 160',
+        tr('مكالمة من ', 'Call from ') + caller,
+        tr('اضغط للرد — مركز 160', 'Tap to answer — 160 centre'),
         NotificationDetails(
           android: AndroidNotificationDetails('koc_call', _channels['koc_call']!.$1,
               importance: Importance.max,

@@ -10,6 +10,7 @@ import 'screens/login.dart';
 import 'services/live.dart';
 import 'services/notify.dart';
 import 'ui.dart';
+import 'i18n.dart';
 
 final navKey = GlobalKey<NavigatorState>();
 
@@ -17,6 +18,7 @@ final navKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
+  await Lang.I.load();
   await Notify.init();
   Notify.onTap = _routePayload;
   runApp(const KocOneApp());
@@ -62,11 +64,13 @@ class KocOneApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ValueListenableBuilder<String>(
+      valueListenable: Lang.I,
+      builder: (context, lang, _) => MaterialApp(
       title: 'ONE',
       navigatorKey: navKey,
       debugShowCheckedModeBanner: false,
-      locale: const Locale('ar'),
+      locale: Locale(lang),
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -74,7 +78,8 @@ class KocOneApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: oneTheme(),
-      home: const AuthGate(),
+      home: AuthGate(key: ValueKey(lang)),
+    ),
     );
   }
 }

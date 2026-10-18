@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../services/live.dart';
+import '../i18n.dart';
 import '../ui.dart';
 
 class AlarmScreen extends StatefulWidget {
@@ -23,9 +24,9 @@ class _Look {
 }
 
 const _looks = {
-  'signal1': _Look(C.sig1, Color(0xFF9E1F1F), Color(0xFF5C1111), Icons.warning_amber_rounded, 'SIGNAL 1 · EMERGENCY', 'نغمة متقطّعة (Broken)'),
-  'signal2': _Look(C.sig2, Color(0xFF1E2026), C.sig1, Icons.login_rounded, 'SIGNAL 2 · EVACUATION', 'نغمة متموّجة (Wailing)'),
-  'signal3': _Look(C.sig3, Color(0xFF247D48), C.sig3, Icons.check_circle_outline_rounded, 'SIGNAL 3 · ALL CLEAR', 'نغمة متصلة ثابتة'),
+  'signal1': _Look(C.sig1, Color(0xFF9E1F1F), Color(0xFF5C1111), Icons.warning_amber_rounded, 'SIGNAL 1 · EMERGENCY', 'broken'),
+  'signal2': _Look(C.sig2, Color(0xFF1E2026), C.sig1, Icons.login_rounded, 'SIGNAL 2 · EVACUATION', 'wailing'),
+  'signal3': _Look(C.sig3, Color(0xFF247D48), C.sig3, Icons.check_circle_outline_rounded, 'SIGNAL 3 · ALL CLEAR', 'steady'),
 };
 
 class _AlarmScreenState extends State<AlarmScreen> {
@@ -71,13 +72,13 @@ class _AlarmScreenState extends State<AlarmScreen> {
   Widget build(BuildContext context) {
     final look = _looks[kind] ?? const _Look(C.navy, C.navyD, C.navy, Icons.campaign, 'ALERT', '');
     final mine = live.myStatus[a['id']];
-    final steps = ((a['body'] as String?) ?? '')
+    final steps = alarmBody(a)
         .split('\n')
         .map((s) => s.trim().replaceFirst(RegExp(r'^\d+[.)]\s*'), ''))
         .where((s) => s.isNotEmpty)
         .toList();
     final muster = live.musterPoint();
-    if (kind == 'signal2' && muster != null && !steps.any((s) => s.contains(muster))) steps.add('توجّه إلى نقطة التجمع: $muster');
+    if (kind == 'signal2' && muster != null && !steps.any((s) => s.contains(muster))) steps.add(tr('توجّه إلى نقطة التجمع: ', 'Go to muster point: ') + muster);
 
     return PopScope(
       canPop: _answered,
@@ -86,7 +87,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
         body: SafeArea(
           child: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 20), children: [
             Row(children: [
-              if (a['drill'] == true) const Tag('تمرين · DRILL', color: Colors.black26),
+              if (a['drill'] == true) Tag(tr('تمرين · DRILL', 'DRILL'), color: Colors.black26),
               const Spacer(),
               if (_answered) IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, color: Colors.white)),
             ]),
@@ -109,14 +110,14 @@ class _AlarmScreenState extends State<AlarmScreen> {
             const SizedBox(height: 18),
             Text(look.eyebrow, textAlign: TextAlign.center, textDirection: TextDirection.ltr, style: const TextStyle(color: Colors.white70, letterSpacing: 2.5, fontSize: 12, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text(a['title'] ?? '', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900, height: 1.25)),
+            Text(alarmTitle(a), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900, height: 1.25)),
             const SizedBox(height: 6),
             Text('${live.areaLabel()} · ${_clock(a['created_at'])}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
             const SizedBox(height: 8),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               _ToneMark(kind: kind),
               const SizedBox(width: 8),
-              Text(look.tone, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              Text(_toneLabel(look.tone), style: const TextStyle(color: Colors.white70, fontSize: 12)),
             ]),
             const SizedBox(height: 20),
             // numbered steps
@@ -137,25 +138,25 @@ class _AlarmScreenState extends State<AlarmScreen> {
             ),
             const SizedBox(height: 18),
             if (kind == 'signal3')
-              _btn('العودة إلى العمل', Colors.white, C.sig3, Icons.check_circle_outline, () => _set('safe'))
+              _btn(tr('العودة إلى العمل', 'Back to work'), Colors.white, C.sig3, Icons.check_circle_outline, () => _set('safe'))
             else ...[
-              Text(_answered ? 'سُجّلت حالتك: ${_label(mine)} — يمكنك تحديثها' : 'اختر حالتك الآن — تصل فورًا لمسؤول الإخلاء و ORT',
+              Text(_answered ? tr('سُجّلت حالتك: ', 'Status recorded: ') + statusLabelOf(mine) + tr(' — يمكنك تحديثها', ' — you can update it') : tr('اختر حالتك الآن — تصل فورًا لمسؤول الإخلاء و ORT', 'Choose your status now — it goes straight to the fire warden and ORT'),
                   textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
               const SizedBox(height: 10),
               Row(children: [
-                Expanded(child: _btn(kind == 'signal1' ? 'أنا بخير' : 'أنا بأمان', Colors.white, C.ok, Icons.check_circle_outline, () => _set('safe'), selected: mine == 'safe')),
+                Expanded(child: _btn(kind == 'signal1' ? tr('أنا بخير', 'I’m OK') : tr('أنا بأمان', 'I’m safe'), Colors.white, C.ok, Icons.check_circle_outline, () => _set('safe'), selected: mine == 'safe')),
                 const SizedBox(width: 10),
-                Expanded(child: _btn('أحتاج مساعدة', look.accent, Colors.white, Icons.warning_amber_rounded, () => _set('need_help'), selected: mine == 'need_help')),
+                Expanded(child: _btn(tr('أحتاج مساعدة', 'I need help'), look.accent, Colors.white, Icons.warning_amber_rounded, () => _set('need_help'), selected: mine == 'need_help')),
               ]),
               const SizedBox(height: 10),
               Row(children: [
-                Expanded(child: _outline('مصاب', Icons.medical_services_outlined, () => _set('injured'), mine == 'injured')),
+                Expanded(child: _outline(tr('مصاب', 'Injured'), Icons.medical_services_outlined, () => _set('injured'), mine == 'injured')),
                 const SizedBox(width: 10),
-                Expanded(child: _outline('محتجز داخل المبنى', Icons.door_front_door_outlined, () => _set('trapped'), mine == 'trapped')),
+                Expanded(child: _outline(tr('محتجز داخل المبنى', 'Trapped inside'), Icons.door_front_door_outlined, () => _set('trapped'), mine == 'trapped')),
               ]),
             ],
             const SizedBox(height: 14),
-            const Text('التنبيه يتجاوز الوضع الصامت · يصل لكل من بالموقع · موقعك يُشارك أثناء الحادث فقط',
+            Text(tr('التنبيه يتجاوز الوضع الصامت · يصل لكل من بالموقع · موقعك يُشارك أثناء الحادث فقط', 'Overrides silent mode · reaches everyone on site · your location is shared during the incident only'),
                 textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 11.5)),
           ]),
         ),
@@ -163,7 +164,13 @@ class _AlarmScreenState extends State<AlarmScreen> {
     );
   }
 
-  static String _label(String? s) => const {'safe': 'آمن', 'need_help': 'يحتاج مساعدة', 'injured': 'مصاب', 'trapped': 'محتجز'}[s] ?? '';
+
+  static String _toneLabel(String k) => switch (k) {
+        'broken' => tr('نغمة متقطّعة', 'Broken tone'),
+        'wailing' => tr('نغمة متموّجة', 'Wailing tone'),
+        'steady' => tr('نغمة متصلة ثابتة', 'Steady tone'),
+        _ => '',
+      };
 
   Widget _btn(String t, Color bg, Color fg, IconData icon, VoidCallback onTap, {bool selected = false}) => FilledButton.icon(
         onPressed: onTap,

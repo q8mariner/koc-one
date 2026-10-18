@@ -10,16 +10,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/live.dart';
 import '../services/secure_report.dart';
+import '../i18n.dart';
 import '../ui.dart';
 
 const reportTypes = {
-  'fire': ('حريق', Icons.local_fire_department),
-  'leak': ('تسرب غاز/نفط', Icons.water_drop),
-  'injury': ('إصابة', Icons.medical_services),
-  'road': ('حادث طريق', Icons.car_crash),
-  'suspicious': ('نشاط مشبوه', Icons.visibility),
-  'hazard': ('خطر سلامة', Icons.warning_amber),
-  'sos': ('نداء استغاثة', Icons.sos),
+  'fire': ('حريق', 'Fire', Icons.local_fire_department),
+  'leak': ('تسرب غاز/نفط', 'Gas/oil leak', Icons.water_drop),
+  'injury': ('إصابة', 'Injury', Icons.medical_services),
+  'road': ('حادث طريق', 'Road accident', Icons.car_crash),
+  'suspicious': ('نشاط مشبوه', 'Suspicious activity', Icons.visibility),
+  'hazard': ('خطر سلامة', 'Safety hazard', Icons.warning_amber),
+  'sos': ('نداء استغاثة', 'SOS', Icons.sos),
 };
 
 class ReportScreen extends StatefulWidget {
@@ -51,7 +52,7 @@ class _ReportScreenState extends State<ReportScreen> {
     final live = LiveService.I;
     try {
       final keyRow = await sb.from('org_public_key').select('jwk').maybeSingle();
-      if (keyRow == null) throw 'لم يفعّل فريق ORT مفتاح التشفير بعد — اتصل بـ 160 مباشرة.';
+      if (keyRow == null) throw tr('لم يفعّل فريق ORT مفتاح التشفير بعد — اتصل بـ 160 مباشرة.', 'ORT hasn’t set up the encryption key yet — call 160 directly.');
       final sealer = SecureReport.forJwk(Map<String, dynamic>.from(keyRow['jwk'] as Map));
       final uid = sb.auth.currentUser!.id;
       final stamp = DateTime.now().millisecondsSinceEpoch;
@@ -78,9 +79,9 @@ class _ReportScreenState extends State<ReportScreen> {
       await _wipe();
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('وصل بلاغك إلى 160 مشفّرًا، وحُذفت الصور من هاتفك.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('وصل بلاغك إلى 160 مشفّرًا، وحُذفت الصور من هاتفك.', 'Your report reached 160 encrypted, and the photos were removed from your phone.'))));
     } catch (e) {
-      setState(() => _err = e is String ? e : 'تعذّر الإرسال: تحقق من الشبكة وأعد المحاولة.');
+      setState(() => _err = e is String ? e : tr('تعذّر الإرسال: تحقق من الشبكة وأعد المحاولة.', 'Couldn’t send: check the network and try again.'));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -105,22 +106,22 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     final live = LiveService.I;
     return Scaffold(
-      appBar: AppBar(title: const Text('بلاغ إلى 160', style: TextStyle(fontWeight: FontWeight.w800))),
+      appBar: AppBar(title: Text(tr('بلاغ إلى 160', 'Report to 160'), style: const TextStyle(fontWeight: FontWeight.w800))),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 24), children: [
         Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(color: C.bad, borderRadius: BorderRadius.circular(16)),
-          child: const Row(children: [
-            Text('160', style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
-            SizedBox(width: 14),
+          child: Row(children: [
+            const Text('160', style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
+            const SizedBox(width: 14),
             Expanded(
-              child: Text('يصل بلاغك مباشرة إلى فريق ORT في مركز 160، مشفّرًا من هاتفك.',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.4)),
+              child: Text(tr('يصل بلاغك مباشرة إلى فريق ORT في مركز 160، مشفّرًا من هاتفك.', 'Your report goes straight to ORT at the 160 centre, encrypted on your phone.'),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.4)),
             ),
           ]),
         ),
-        const SectionTitle('نوع البلاغ'),
+        SectionTitle(tr('نوع البلاغ', 'Report type')),
         GridView.count(
           crossAxisCount: 3,
           shrinkWrap: true,
@@ -137,9 +138,9 @@ class _ReportScreenState extends State<ReportScreen> {
                   borderRadius: BorderRadius.circular(14),
                   onTap: () => setState(() => _type = e.key),
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(e.value.$2, color: _type == e.key ? Colors.white : (e.key == 'sos' || e.key == 'fire' ? C.bad : C.navy), size: 28),
+                    Icon(e.value.$3, color: _type == e.key ? Colors.white : (e.key == 'sos' || e.key == 'fire' ? C.bad : C.navy), size: 28),
                     const SizedBox(height: 6),
-                    Text(e.value.$1, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: _type == e.key ? Colors.white : C.fg)),
+                    Text(tr(e.value.$1, e.value.$2), textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: _type == e.key ? Colors.white : C.fg)),
                   ]),
                 ),
               ),
@@ -155,18 +156,18 @@ class _ReportScreenState extends State<ReportScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(color: const Color(0xFFE6F4EC), borderRadius: BorderRadius.circular(10)),
-              child: Text(live.pos == null ? 'غير متاح' : 'تلقائي', style: const TextStyle(color: Color(0xFF1F7A45), fontWeight: FontWeight.w700, fontSize: 12)),
+              child: Text(live.pos == null ? tr('غير متاح', 'Unavailable') : tr('تلقائي', 'Automatic'), style: const TextStyle(color: Color(0xFF1F7A45), fontWeight: FontWeight.w700, fontSize: 12)),
             ),
           ]),
         ),
-        TextField(controller: _desc, maxLines: 4, decoration: const InputDecoration(labelText: 'ماذا ترى؟ (اختياري)')),
+        TextField(controller: _desc, maxLines: 4, decoration: InputDecoration(labelText: tr('ماذا ترى؟ (اختياري)', 'What do you see? (optional)'))),
         const SizedBox(height: 6),
         Row(children: [
-          const SectionTitle('صور البلاغ'),
+          SectionTitle(tr('صور البلاغ', 'Report photos')),
           Text('  (${_photos.length}/4)', style: const TextStyle(color: C.muted)),
           const Spacer(),
           const Icon(Icons.lock, size: 16, color: C.ok),
-          const Text(' مشفّرة', style: TextStyle(color: C.ok, fontWeight: FontWeight.w700)),
+          Text(tr(' مشفّرة', ' Encrypted'), style: const TextStyle(color: C.ok, fontWeight: FontWeight.w700)),
         ]),
         SizedBox(
           height: 96,
@@ -199,16 +200,16 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
           ]),
         ),
-        const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Text('تُلتقط بكاميرا التطبيق فقط · لا تُحفظ في المعرض · تُرسل إلى 160 فقط', style: TextStyle(color: C.muted, fontSize: 12)),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(tr('تُلتقط بكاميرا التطبيق فقط · لا تُحفظ في المعرض · تُرسل إلى 160 فقط', 'In-app camera only · not saved to the gallery · sent to 160 only'), style: const TextStyle(color: C.muted, fontSize: 12)),
         ),
         if (_err != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_err!, style: const TextStyle(color: C.bad))),
         const SizedBox(height: 20),
         FilledButton.icon(
           onPressed: _sending ? null : _send,
           icon: const Icon(Icons.send),
-          label: Text(_sending ? 'جارٍ التشفير والإرسال…' : 'إرسال البلاغ إلى 160'),
+          label: Text(_sending ? tr('جارٍ التشفير والإرسال…', 'Encrypting and sending…') : tr('إرسال البلاغ إلى 160', 'Send report to 160')),
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56), backgroundColor: C.bad, foregroundColor: Colors.white),
         ),
       ]),

@@ -1,45 +1,62 @@
-/* KOC ONE · ORT dashboard (ECC-160) — Vue 3 (no build step) + Leaflet + Supabase */
+/* ONE · ORT dashboard (ECC-160) — Vue 3 (no build step) + Leaflet + Supabase */
 const { createApp, reactive, computed, onMounted, nextTick, watch } = Vue;
 const C = window.KOC_CONFIG;
 const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_KEY);
 
+// Bilingual constants: every label is { ar, en }; L() picks the current language.
 const KINDS = {
-  signal1: { label: "الإشارة 1 · طوارئ", short: "طوارئ", title: "الإشارة 1 — طوارئ",
-    body: "1. ابقَ متأهبًا في مكانك\n2. استمع لتعليمات النداء العام\n3. أوقف الأعمال الخطرة وأمّن المعدات", cls: "k1" },
-  signal2: { label: "الإشارة 2 · إخلاء", short: "إخلاء", title: "الإشارة 2 — إخلاء",
-    body: "1. أخلِ المنطقة وفق تعليمات النداء العام\n2. استخدم مسارات الإخلاء الآمنة — لا مصاعد\n3. توجّه إلى نقطة التجمع\n4. سجّل حالتك في التطبيق عند الوصول", cls: "k2" },
-  signal3: { label: "الإشارة 3 · زوال الخطر", short: "زوال الخطر", title: "الإشارة 3 — زوال الخطر",
-    body: "1. عُد إلى مكان عملك\n2. اتبع تعليمات مسؤول الإخلاء\n3. أُغلق الحادث وسُجّل", cls: "k3" },
-  message: { label: "رسالة تنبيه", short: "تنبيه", title: "تنبيه سلامة", body: "", cls: "km" },
+  signal1: { label: { ar: "الإشارة 1 · طوارئ", en: "Signal 1 · Emergency" }, short: { ar: "طوارئ", en: "Emergency" }, cls: "k1",
+    title: { ar: "الإشارة 1 — طوارئ", en: "Signal 1 — Emergency" },
+    body: { ar: "1. ابقَ متأهبًا في مكانك\n2. استمع لتعليمات النداء العام\n3. أوقف الأعمال الخطرة وأمّن المعدات",
+            en: "1. Stay alert and ready in place\n2. Listen to public address instructions\n3. Stop hazardous work and secure equipment" } },
+  signal2: { label: { ar: "الإشارة 2 · إخلاء", en: "Signal 2 · Evacuate" }, short: { ar: "إخلاء", en: "Evacuation" }, cls: "k2",
+    title: { ar: "الإشارة 2 — إخلاء", en: "Signal 2 — Evacuate" },
+    body: { ar: "1. أخلِ المنطقة وفق تعليمات النداء العام\n2. استخدم مسارات الإخلاء الآمنة — لا مصاعد\n3. توجّه إلى نقطة التجمع\n4. سجّل حالتك في التطبيق عند الوصول",
+            en: "1. Evacuate the area per PA instructions\n2. Use safe evacuation routes — no lifts\n3. Go to the muster point\n4. Record your status in the app on arrival" } },
+  signal3: { label: { ar: "الإشارة 3 · زوال الخطر", en: "Signal 3 · All clear" }, short: { ar: "زوال الخطر", en: "All clear" }, cls: "k3",
+    title: { ar: "الإشارة 3 — زوال الخطر", en: "Signal 3 — All clear" },
+    body: { ar: "1. عُد إلى مكان عملك\n2. اتبع تعليمات مسؤول الإخلاء\n3. أُغلق الحادث وسُجّل",
+            en: "1. Return to your workplace\n2. Follow the fire warden’s instructions\n3. The incident is closed and logged" } },
+  message: { label: { ar: "رسالة تنبيه", en: "Safety message" }, short: { ar: "تنبيه", en: "Message" }, cls: "km",
+    title: { ar: "تنبيه سلامة", en: "Safety alert" }, body: { ar: "", en: "" } },
 };
-const SCOPES = { employee: "موظف", building: "مبنى", zone: "Zone", sector: "قطاع", all: "جميع القطاعات" };
+const SCOPES = { employee: { ar: "موظف", en: "Employee" }, building: { ar: "مبنى", en: "Building" }, zone: { ar: "Zone", en: "Zone" },
+  sector: { ar: "قطاع", en: "Sector" }, all: { ar: "جميع القطاعات", en: "All sectors" } };
 const STATUS = {
-  received: ["استلم — لم يرد", "st-wait"], safe: ["آمن", "st-ok"], need_help: ["يحتاج مساعدة", "st-warn"],
-  injured: ["مصاب", "st-bad"], trapped: ["محتجز", "st-bad"], none: ["لم يستلم", "st-none"],
+  received: [{ ar: "استلم — لم يرد", en: "Received — no reply" }, "st-wait"], safe: [{ ar: "آمن", en: "Safe" }, "st-ok"],
+  need_help: [{ ar: "يحتاج مساعدة", en: "Needs help" }, "st-warn"], injured: [{ ar: "مصاب", en: "Injured" }, "st-bad"],
+  trapped: [{ ar: "محتجز", en: "Trapped" }, "st-bad"], none: [{ ar: "لم يستلم", en: "Not received" }, "st-none"],
 };
 const NAV = [
-  { k: "map", t: "الخريطة الحية", tag: "ECC-160 · كل المواقع", h: "صورة واحدة لكل المواقع", i: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zm0 0v14m6-12v14" },
-  { k: "alarms", t: "الإنذارات", tag: "الإنذار والحصر", h: "إطلاق الإنذار ومتابعة الحصر", i: "M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0" },
-  { k: "structure", t: "القطاعات والحدود", tag: "الهيكل وحدود GPS", h: "القطاعات · Zones · المباني", i: "M4 20V8l8-4 8 4v12M9 20v-6h6v6M4 20h16" },
-  { k: "people", t: "الموظفون", tag: "الحسابات", h: "الموظفون وجهات الاتصال", i: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7 8v-1a3 3 0 0 0-2-3m-1-9a3 3 0 0 1 0 6" },
-  { k: "reports", t: "بلاغات 160", tag: "بلاغات مشفرة", h: "بلاغات 160 مع الصور", i: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" },
-  { k: "keys", t: "مفتاح التشفير", tag: "الأمان", h: "مفتاح تشفير البلاغات", i: "M8 15a4 4 0 1 1 3-6.6L21 8v4h-2v2h-2v2h-3l-2.5-2.4A4 4 0 0 1 8 15zm-1-4h.01" },
+  { k: "map", t: { ar: "الخريطة الحية", en: "Live map" }, tag: { ar: "ECC-160 · كل المواقع", en: "ECC-160 · all sites" }, h: { ar: "صورة واحدة لكل المواقع", en: "One picture of every site" }, i: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zm0 0v14m6-12v14" },
+  { k: "alarms", t: { ar: "الإنذارات", en: "Alarms" }, tag: { ar: "الإنذار والحصر", en: "Alarm & muster" }, h: { ar: "إطلاق الإنذار ومتابعة الحصر", en: "Launch alarms and follow the muster" }, i: "M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0" },
+  { k: "structure", t: { ar: "القطاعات والحدود", en: "Areas & boundaries" }, tag: { ar: "الهيكل وحدود GPS", en: "Structure & GPS boundaries" }, h: { ar: "القطاعات · Zones · المباني", en: "Sectors · Zones · Buildings" }, i: "M4 20V8l8-4 8 4v12M9 20v-6h6v6M4 20h16" },
+  { k: "people", t: { ar: "الموظفون", en: "Employees" }, tag: { ar: "الحسابات", en: "Accounts" }, h: { ar: "الموظفون وجهات الاتصال", en: "Employees and contacts" }, i: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7 8v-1a3 3 0 0 0-2-3m-1-9a3 3 0 0 1 0 6" },
+  { k: "reports", t: { ar: "بلاغات 160", en: "160 reports" }, tag: { ar: "بلاغات مشفرة", en: "Encrypted reports" }, h: { ar: "بلاغات 160 مع الصور", en: "160 reports with photos" }, i: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" },
+  { k: "keys", t: { ar: "مفتاح التشفير", en: "Encryption key" }, tag: { ar: "الأمان", en: "Security" }, h: { ar: "مفتاح تشفير البلاغات", en: "Report encryption key" }, i: "M8 15a4 4 0 1 1 3-6.6L21 8v4h-2v2h-2v2h-3l-2.5-2.4A4 4 0 0 1 8 15zm-1-4h.01" },
 ];
-const CLASSES = { unclassified: "غير مصنفة", zone2: "Zone 2", zone1: "Zone 1", zone0: "Zone 0" };
-const REPORT_TYPES = { fire: "حريق", leak: "تسرب غاز/نفط", injury: "إصابة", road: "حادث طريق", suspicious: "نشاط مشبوه", hazard: "خطر سلامة", sos: "نداء استغاثة" };
-const REPORT_STATUS = { new: "جديد", received: "استلمه ORT", dispatched: "أُحيل للفرق", closed: "مغلق" };
+const CLASSES = { unclassified: { ar: "غير مصنفة", en: "Unclassified" }, zone2: { ar: "Zone 2", en: "Zone 2" }, zone1: { ar: "Zone 1", en: "Zone 1" }, zone0: { ar: "Zone 0", en: "Zone 0" } };
+const REPORT_TYPES = { fire: { ar: "حريق", en: "Fire" }, leak: { ar: "تسرب غاز/نفط", en: "Gas/oil leak" }, injury: { ar: "إصابة", en: "Injury" },
+  road: { ar: "حادث طريق", en: "Road accident" }, suspicious: { ar: "نشاط مشبوه", en: "Suspicious activity" }, hazard: { ar: "خطر سلامة", en: "Safety hazard" }, sos: { ar: "نداء استغاثة", en: "SOS" } };
+const REPORT_STATUS = { new: { ar: "جديد", en: "New" }, received: { ar: "استلمه ORT", en: "Received by ORT" }, dispatched: { ar: "أُحيل للفرق", en: "Dispatched" }, closed: { ar: "مغلق", en: "Closed" } };
+const CALL_LABEL = { connecting: { ar: "جارٍ التجهيز…", en: "Preparing…" }, ringing: { ar: "يرن على هاتف الموظف…", en: "Ringing the employee’s phone…" },
+  connected: { ar: "متصل", en: "Connected" }, ended: { ar: "انتهت المكالمة", en: "Call ended" }, missed: { ar: "لم يرد", en: "No answer" },
+  rejected: { ar: "رفض المكالمة", en: "Call declined" }, failed: { ar: "تعذّر الاتصال", en: "Couldn’t connect" } };
+
+let savedLang = "ar";
+try { savedLang = localStorage.getItem("one.lang") || "ar"; } catch (_) {}
 
 createApp({
   setup() {
     const s = reactive({
       session: null, me: null, authErr: "", email: "", password: "", busy: false,
-      tab: "map", toast: "", _tick: 0,
+      tab: "map", toast: "", _tick: 0, lang: savedLang,
       sectors: [], zones: [], buildings: [], people: [], alarms: [], acks: [], reports: [],
       // structure editor
       edit: null, // {type, id?, name, parent, color, classification, code, muster_point, entry_message, boundary, coordsText}
       drawing: false,
       // alarm form
-      af: { kind: "signal2", scope: "building", target_id: "", title: KINDS.signal2.title, body: KINDS.signal2.body, drill: false, second: "", confirm: false },
+      af: { kind: "signal2", scope: "building", target_id: "", title: KINDS.signal2.title.ar, title_en: KINDS.signal2.title.en, body: KINDS.signal2.body.ar, body_en: KINDS.signal2.body.en, drill: false, second: "", confirm: false },
       selAlarm: null,
       // people
       pf: null,
@@ -51,16 +68,30 @@ createApp({
 
     let map, layers, peopleLayer, drawLayer, caller;
     const toast = (m) => { s.toast = m; setTimeout(() => (s.toast = ""), 3500); };
+    const tr = (ar, en) => (s.lang === "en" ? en : ar);
+    const L = (o) => (o && typeof o === "object" ? o[s.lang] ?? o.ar : o);
+    const atitle = (a) => (s.lang === "en" && a.title_en ? a.title_en : a.title);
+    const curNav = computed(() => NAV.find((n) => n.k === s.tab) || NAV[0]);
+    function applyLang() {
+      document.documentElement.lang = s.lang;
+      document.documentElement.dir = s.lang === "en" ? "ltr" : "rtl";
+      try { if (map) map.pm.setLang(s.lang); } catch (_) {}
+    }
+    function toggleLang() {
+      s.lang = s.lang === "ar" ? "en" : "ar";
+      try { localStorage.setItem("one.lang", s.lang); } catch (_) {}
+      applyLang(); drawAreas(); drawPeople();
+    }
     const byId = (arr, id) => arr.find((x) => x.id === id);
     const name = (type, id) => { const a = { sector: s.sectors, zone: s.zones, building: s.buildings, employee: s.people }[type]; const o = a && byId(a, id); return o ? (o.name || o.full_name) : "—"; };
-    const fmt = (t) => t ? new Date(t).toLocaleString("ar-KW", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "—";
-    const ago = (t) => { void s._tick; if (!t) return "—"; const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 1 ? "الآن" : m < 60 ? `قبل ${m} د` : m < 1440 ? `قبل ${Math.round(m / 60)} س` : fmt(t); };
+    const fmt = (t) => t ? new Date(t).toLocaleString(s.lang === "en" ? "en-GB" : "ar-KW", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "—";
+    const ago = (t) => { void s._tick; if (!t) return "—"; const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 1 ? tr("الآن", "now") : m < 60 ? tr(`قبل ${m} د`, `${m} min ago`) : m < 1440 ? tr(`قبل ${Math.round(m / 60)} س`, `${Math.round(m / 60)} h ago`) : fmt(t); };
 
     // ───── Auth ─────
     async function login() {
       s.busy = true; s.authErr = "";
       const { error } = await sb.auth.signInWithPassword({ email: s.email.trim(), password: s.password });
-      s.busy = false; if (error) s.authErr = "تعذّر الدخول: تحقق من البريد وكلمة المرور.";
+      s.busy = false; if (error) s.authErr = tr("تعذّر الدخول: تحقق من البريد وكلمة المرور.", "Sign-in failed: check the email and password.");
     }
     async function logout() { await sb.auth.signOut(); location.reload(); }
 
@@ -96,7 +127,7 @@ createApp({
         .on("postgres_changes", { event: "*", schema: "public", table: "alarms" }, ({ new: r }) => { r && r.id && upsertLocal(s.alarms, r); })
         .on("postgres_changes", { event: "*", schema: "public", table: "alarm_acks" }, ({ new: r }) => { if (r && r.alarm_id) upsertLocal(s.acks, r, (x) => x.alarm_id + x.user_id); drawPeople(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, ({ new: r }) => { if (r && r.id) { upsertLocal(s.people, r); drawPeople(); } })
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "reports" }, ({ new: r }) => { s.reports.unshift(r); toast("بلاغ جديد وارد إلى 160 — " + (REPORT_TYPES[r.type] || r.type)); beep(); })
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "reports" }, ({ new: r }) => { s.reports.unshift(r); toast(tr("بلاغ جديد وارد إلى 160 — ", "New 160 report — ") + (L(REPORT_TYPES[r.type]) || r.type)); beep(); })
         .subscribe();
     }
     function beep() { try { const a = new AudioContext(), o = a.createOscillator(); o.frequency.value = 880; o.connect(a.destination); o.start(); o.stop(a.currentTime + 0.25); } catch (_) {} }
@@ -107,7 +138,7 @@ createApp({
       map = L.map("map", { zoomControl: true, attributionControl: true }).setView(C.MAP_CENTER, 12);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
       layers = L.layerGroup().addTo(map); peopleLayer = L.layerGroup().addTo(map); drawLayer = L.layerGroup().addTo(map);
-      try { map.pm.setLang("ar"); } catch (_) {}
+      applyLang();
       map.on("pm:create", (e) => {
         const pts = e.layer.getLatLngs()[0].map((p) => [+p.lat.toFixed(6), +p.lng.toFixed(6)]);
         map.removeLayer(e.layer); s.drawing = false;
@@ -118,9 +149,9 @@ createApp({
     function poly(points, opts) { return points && points.length > 2 ? L.polygon(points, opts) : null; }
     function drawAreas() {
       if (!layers) return; layers.clearLayers();
-      s.sectors.forEach((x) => { const p = poly(x.boundary, { color: x.color, weight: 2, fillOpacity: 0.05, dashArray: "6 6" }); p && p.bindTooltip("قطاع: " + x.name).addTo(layers); });
-      s.zones.forEach((x) => { const sec = byId(s.sectors, x.sector_id); const p = poly(x.boundary, { color: x.classification === "unclassified" ? (sec?.color || "#2B4C9B") : "#E07B29", weight: 2, fillOpacity: 0.1 }); p && p.bindTooltip(`${x.name} · ${CLASSES[x.classification]}`).addTo(layers); });
-      s.buildings.forEach((x) => { const p = poly(x.boundary, { color: "#1F3A7A", weight: 2, fillColor: "#2B4C9B", fillOpacity: 0.18 }); p && p.bindTooltip("مبنى: " + x.name, { permanent: false }).addTo(layers); });
+      s.sectors.forEach((x) => { const p = poly(x.boundary, { color: x.color, weight: 2, fillOpacity: 0.05, dashArray: "6 6" }); p && p.bindTooltip(tr("قطاع: ", "Sector: ") + x.name).addTo(layers); });
+      s.zones.forEach((x) => { const sec = byId(s.sectors, x.sector_id); const p = poly(x.boundary, { color: x.classification === "unclassified" ? (sec?.color || "#2B4C9B") : "#E07B29", weight: 2, fillOpacity: 0.1 }); p && p.bindTooltip(`${x.name} · ${L(CLASSES[x.classification])}`).addTo(layers); });
+      s.buildings.forEach((x) => { const p = poly(x.boundary, { color: "#1F3A7A", weight: 2, fillColor: "#2B4C9B", fillOpacity: 0.18 }); p && p.bindTooltip(tr("مبنى: ", "Building: ") + x.name, { permanent: false }).addTo(layers); });
     }
     function statusFor(uid) {
       const a = s.alarms.find((x) => x.active && x.id === s.selAlarm) || s.alarms.find((x) => x.active);
@@ -132,8 +163,8 @@ createApp({
       s.people.filter((p) => p.last_lat && p.role !== "ort").forEach((p) => {
         const st = statusFor(p.id);
         L.circleMarker([p.last_lat, p.last_lng], { radius: 7, color: "#ffffff", weight: 2, fillColor: STATUS_COLOR[st] || (p.online ? "#2B4C9B" : "#94A3B8"), fillOpacity: 1 })
-          .bindPopup(`<b>${esc(p.full_name)}</b><br>${esc(p.employee_no || "")} · فصيلة ${esc(p.blood_type || "—")}<br>${esc(name("building", p.cur_building_id))} · آخر ظهور ${ago(p.last_seen)}<br>
-            ${st ? "الحالة: " + STATUS[st][0] + "<br>" : ""}<button class="mini" onclick="window.__kocCall('${p.id}')">اتصال صوتي</button>`)
+          .bindPopup(`<b>${esc(p.full_name)}</b><br>${esc(p.employee_no || "")} · ${tr("فصيلة", "Blood")} ${esc(p.blood_type || "—")}<br>${esc(name("building", p.cur_building_id))} · ${tr("آخر ظهور", "last seen")} ${ago(p.last_seen)}<br>
+            ${st ? tr("الحالة: ", "Status: ") + L(STATUS[st][0]) + "<br>" : ""}<button class="mini" onclick="window.__kocCall('${p.id}')">${tr("اتصال صوتي", "Voice call")}</button>`)
           .addTo(peopleLayer);
       });
     }
@@ -161,40 +192,40 @@ createApp({
     function cancelDraw() { s.drawing = false; map.pm.disableDraw(); }
     function parseCoords() {
       const pts = s.edit.coordsText.split(/\n+/).map((l) => l.split(/[,\s]+/).filter(Boolean).map(Number)).filter((p) => p.length === 2 && p.every((n) => !isNaN(n)));
-      if (pts.length < 3) return toast("أدخل 3 نقاط على الأقل بصيغة: خط العرض, خط الطول");
+      if (pts.length < 3) return toast(tr("أدخل 3 نقاط على الأقل بصيغة: خط العرض, خط الطول", "Enter at least 3 points as: latitude, longitude"));
       s.edit.boundary = pts; drawEditPreview(); map.fitBounds(pts, { padding: [40, 40] });
     }
     function useMyGps() {
-      if (!navigator.geolocation) return toast("المتصفح لا يدعم تحديد الموقع");
+      if (!navigator.geolocation) return toast(tr("المتصفح لا يدعم تحديد الموقع", "This browser has no location support"));
       navigator.geolocation.getCurrentPosition((p) => {
         const line = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`;
-        s.edit.coordsText = (s.edit.coordsText ? s.edit.coordsText + "\n" : "") + line; toast("أُضيفت نقطة GPS · الدقة " + Math.round(p.coords.accuracy) + " م");
-      }, () => toast("تعذّر قراءة GPS"), { enableHighAccuracy: true });
+        s.edit.coordsText = (s.edit.coordsText ? s.edit.coordsText + "\n" : "") + line; toast(tr("أُضيفت نقطة GPS · الدقة ", "GPS point added · accuracy ") + Math.round(p.coords.accuracy) + tr(" م", " m"));
+      }, () => toast(tr("تعذّر قراءة GPS", "Couldn’t read GPS")), { enableHighAccuracy: true });
     }
     function drawEditPreview() { drawLayer.clearLayers(); const p = poly(s.edit?.boundary, { color: "#E5B80B", weight: 3, fillOpacity: 0.2 }); p && p.addTo(drawLayer); }
     async function saveItem() {
-      const e = s.edit; if (!e.name.trim()) return toast("اكتب الاسم أولًا");
+      const e = s.edit; if (!e.name.trim()) return toast(tr("اكتب الاسم أولًا", "Enter a name first"));
       const table = { sector: "sectors", zone: "zones", building: "buildings" }[e.type];
       const row = { name: e.name.trim(), boundary: e.boundary, entry_message: e.entry_message || null };
       if (e.type === "sector") row.color = e.color;
-      if (e.type === "zone") { if (!e.parent) return toast("اختر القطاع"); row.sector_id = e.parent; row.classification = e.classification; }
-      if (e.type === "building") { if (!e.parent) return toast("اختر الـ Zone"); row.zone_id = e.parent; row.code = e.code || null; row.muster_point = e.muster_point || null; }
+      if (e.type === "zone") { if (!e.parent) return toast(tr("اختر القطاع", "Choose a sector")); row.sector_id = e.parent; row.classification = e.classification; }
+      if (e.type === "building") { if (!e.parent) return toast(tr("اختر الـ Zone", "Choose a zone")); row.zone_id = e.parent; row.code = e.code || null; row.muster_point = e.muster_point || null; }
       const q = e.id ? sb.from(table).update(row).eq("id", e.id) : sb.from(table).insert(row);
-      const { error } = await q; if (error) return toast("خطأ: " + error.message);
-      toast("تم الحفظ"); s.edit = null; drawLayer.clearLayers(); await loadAll();
+      const { error } = await q; if (error) return toast(tr("خطأ: ", "Error: ") + error.message);
+      toast(tr("تم الحفظ", "Saved")); s.edit = null; drawLayer.clearLayers(); await loadAll();
     }
     async function deleteItem() {
       const e = s.edit; if (!e.id) return;
       if (!e.confirmDel) { e.confirmDel = true; return; }
       const table = { sector: "sectors", zone: "zones", building: "buildings" }[e.type];
       const { error } = await sb.from(table).delete().eq("id", e.id); if (error) return toast(error.message);
-      s.edit = null; drawLayer.clearLayers(); await loadAll(); toast("تم الحذف");
+      s.edit = null; drawLayer.clearLayers(); await loadAll(); toast(tr("تم الحذف", "Deleted"));
     }
 
     // ───── Alarms ─────
     const targets = computed(() => ({ employee: s.people.filter((p) => p.role !== "ort").map((p) => ({ id: p.id, name: p.full_name + (p.employee_no ? " · " + p.employee_no : "") })),
       building: s.buildings, zone: s.zones, sector: s.sectors, all: [] }[s.af.scope]));
-    function setKind(k) { s.af.kind = k; s.af.title = KINDS[k].title; s.af.body = KINDS[k].body; }
+    function setKind(k) { s.af.kind = k; s.af.title = KINDS[k].title.ar; s.af.title_en = KINDS[k].title.en; s.af.body = KINDS[k].body.ar; s.af.body_en = KINDS[k].body.en; }
     function inScope(p, a) {
       if (a.scope === "all") return !!(p.cur_sector_id || p.cur_zone_id || p.cur_building_id);
       if (a.scope === "employee") return p.id === a.target_id;
@@ -206,23 +237,23 @@ createApp({
     });
     async function launch() {
       const a = s.af;
-      if (a.scope !== "all" && !a.target_id) return toast("اختر الهدف");
-      if (!a.title.trim()) return toast("اكتب عنوان الإنذار");
-      if (a.kind !== "message" && (!a.second.trim() || !a.confirm)) return toast("الإطلاق يحتاج تأكيدًا ثنائيًا: اسم الضابط الثاني وتأشير التأكيد");
-      const { data, error } = await sb.from("alarms").insert({ kind: a.kind, title: a.title.trim(), body: a.body, scope: a.scope, target_id: a.scope === "all" ? null : a.target_id,
+      if (a.scope !== "all" && !a.target_id) return toast(tr("اختر الهدف", "Choose a target"));
+      if (!a.title.trim() && !a.title_en.trim()) return toast(tr("اكتب عنوان الإنذار", "Enter the alarm title"));
+      if (a.kind !== "message" && (!a.second.trim() || !a.confirm)) return toast(tr("الإطلاق يحتاج تأكيدًا ثنائيًا: اسم الضابط الثاني وتأشير التأكيد", "Launch needs dual confirmation: the second officer’s name and the tick box"));
+      const { data, error } = await sb.from("alarms").insert({ kind: a.kind, title: a.title.trim() || a.title_en.trim(), body: a.body, title_en: a.title_en.trim() || null, body_en: a.body_en || null, scope: a.scope, target_id: a.scope === "all" ? null : a.target_id,
         drill: a.drill, created_by: s.me.id, confirmed_by_name: a.second.trim() || null, active: a.kind !== "message" && a.kind !== "signal3" }).select().single();
-      if (error) return toast("تعذّر الإطلاق: " + error.message);
+      if (error) return toast(tr("تعذّر الإطلاق: ", "Launch failed: ") + error.message);
       if (a.kind === "signal3") await sb.from("alarms").update({ active: false, closed_at: new Date().toISOString() }).eq("active", true).eq("scope", a.scope).filter("target_id", a.scope === "all" ? "is" : "eq", a.scope === "all" ? null : a.target_id);
       upsertLocal(s.alarms, data); if (data.active) s.selAlarm = data.id;
-      a.confirm = false; a.second = ""; toast(`أُطلق: ${data.title} → ${SCOPES[data.scope]}${data.scope !== "all" ? " · " + name(data.scope, data.target_id) : ""}`);
+      a.confirm = false; a.second = ""; toast(`${tr("أُطلق", "Launched")}: ${atitle(data)} → ${L(SCOPES[data.scope])}${data.scope !== "all" ? " · " + name(data.scope, data.target_id) : ""}`);
       await loadAll();
     }
     async function closeAlarm(al, allClear) {
       if (allClear) {
-        await sb.from("alarms").insert({ kind: "signal3", title: KINDS.signal3.title, body: KINDS.signal3.body, scope: al.scope, target_id: al.target_id, drill: al.drill, created_by: s.me.id, active: false, confirmed_by_name: s.me.full_name });
+        await sb.from("alarms").insert({ kind: "signal3", title: KINDS.signal3.title.ar, body: KINDS.signal3.body.ar, title_en: KINDS.signal3.title.en, body_en: KINDS.signal3.body.en, scope: al.scope, target_id: al.target_id, drill: al.drill, created_by: s.me.id, active: false, confirmed_by_name: s.me.full_name });
       }
       await sb.from("alarms").update({ active: false, closed_at: new Date().toISOString() }).eq("id", al.id);
-      await loadAll(); toast(allClear ? "أُرسلت الإشارة 3 · زوال الخطر وأُغلق الحادث" : "أُغلق الإنذار");
+      await loadAll(); toast(allClear ? tr("أُرسلت الإشارة 3 · زوال الخطر وأُغلق الحادث", "Signal 3 · All clear sent and the incident closed") : tr("أُغلق الإنذار", "Alarm closed"));
     }
     function alarmRoster(al) {
       const acks = s.acks.filter((k) => k.alarm_id === al.id);
@@ -241,43 +272,42 @@ createApp({
     // ───── People ─────
     function newPerson() { s.pf = { email: "", password: "", full_name: "", employee_no: "", phone: "", blood_type: "O+", role: "employee" }; }
     async function savePerson() {
-      const f = s.pf; if (!f.email || f.password.length < 8 || !f.full_name) return toast("البريد والاسم وكلمة مرور من 8 أحرف على الأقل مطلوبة");
+      const f = s.pf; if (!f.email || f.password.length < 8 || !f.full_name) return toast(tr("البريد والاسم وكلمة مرور من 8 أحرف على الأقل مطلوبة", "Email, name and a password of at least 8 characters are required"));
       const { data, error } = await sb.functions.invoke("manage-users", { body: { action: "create", ...f } });
-      if (error || data?.error) return toast("تعذّر الإنشاء: " + (data?.error || error.message));
-      s.pf = null; toast("أُنشئ الحساب — سلّم الموظف بيانات الدخول للتطبيق"); await loadAll();
+      if (error || data?.error) return toast(tr("تعذّر الإنشاء: ", "Couldn’t create: ") + (data?.error || error.message));
+      s.pf = null; toast(tr("أُنشئ الحساب — سلّم الموظف بيانات الدخول للتطبيق", "Account created — give the employee their sign-in details")); await loadAll();
     }
     async function updatePerson(p, field, value) { const { error } = await sb.from("profiles").update({ [field]: value }).eq("id", p.id); if (error) toast(error.message); }
 
     // ───── Calls ─────
     async function callPerson(id) {
       const p = byId(s.people, id); if (!p) return;
-      if (s.call) return toast("هناك مكالمة جارية");
+      if (s.call) return toast(tr("هناك مكالمة جارية", "A call is already in progress"));
       s.call = p; s.callState = "connecting"; s.muted = false;
       caller = window.KocCall(sb, (st) => { s.callState = st; if (["ended", "missed", "rejected", "failed"].includes(st)) setTimeout(() => { if (s.callState === st) s.call = null; }, 2500); });
-      try { await caller.start(p.id, s.me.full_name || "ORT · 160"); } catch (e) { s.callState = "failed"; toast("تعذّر بدء المكالمة: " + (e.message || e)); setTimeout(() => (s.call = null), 2000); }
+      try { await caller.start(p.id, s.me.full_name || "ORT · 160"); } catch (e) { s.callState = "failed"; toast(tr("تعذّر بدء المكالمة: ", "Couldn’t start the call: ") + (e.message || e)); setTimeout(() => (s.call = null), 2000); }
     }
     window.__kocCall = callPerson;
     function hangup() { caller && caller.end("ended"); }
     function toggleMute() { s.muted = !s.muted; caller && caller.mute(s.muted); }
-    const CALL_LABEL = { connecting: "جارٍ التجهيز…", ringing: "يرن على هاتف الموظف…", connected: "متصل", ended: "انتهت المكالمة", missed: "لم يرد", rejected: "رفض المكالمة", failed: "تعذّر الاتصال" };
 
     // ───── Reports & keys ─────
     async function setupKeys() {
-      if (s.newPass.length < 10) return toast("عبارة المرور 10 أحرف على الأقل");
-      if (s.newPass !== s.newPass2) return toast("عبارتا المرور غير متطابقتين");
+      if (s.newPass.length < 10) return toast(tr("عبارة المرور 10 أحرف على الأقل", "The passphrase needs at least 10 characters"));
+      if (s.newPass !== s.newPass2) return toast(tr("عبارتا المرور غير متطابقتين", "The passphrases don’t match"));
       if (s.hasKey && !s.confirmRotate) { s.confirmRotate = true; return; }
       const k = await KocCrypto.createOrgKeys(s.newPass);
       const a = await sb.from("org_public_key").upsert({ id: 1, jwk: k.publicJwk, updated_at: new Date().toISOString() });
       const b = await sb.from("org_private_key").upsert({ id: 1, wrapped: k.wrapped, salt: k.salt, iv: k.iv, updated_at: new Date().toISOString() });
-      if (a.error || b.error) return toast("خطأ: " + (a.error || b.error).message);
-      s.privKey = k.privateKey; s.newPass = s.newPass2 = ""; s.confirmRotate = false; await loadAll(); toast("أُنشئ مفتاح التشفير. احفظ عبارة المرور في مكان آمن.");
+      if (a.error || b.error) return toast(tr("خطأ: ", "Error: ") + (a.error || b.error).message);
+      s.privKey = k.privateKey; s.newPass = s.newPass2 = ""; s.confirmRotate = false; await loadAll(); toast(tr("أُنشئ مفتاح التشفير. احفظ عبارة المرور في مكان آمن.", "Encryption key created. Keep the passphrase somewhere safe."));
     }
     async function unlockKey() {
-      try { s.privKey = await KocCrypto.unlock(s.keyRow, s.pass); s.pass = ""; toast("فُتح المفتاح لهذه الجلسة فقط"); }
-      catch (_) { toast("عبارة المرور غير صحيحة"); }
+      try { s.privKey = await KocCrypto.unlock(s.keyRow, s.pass); s.pass = ""; toast(tr("فُتح المفتاح لهذه الجلسة فقط", "Key unlocked for this session only")); }
+      catch (_) { toast(tr("عبارة المرور غير صحيحة", "Wrong passphrase")); }
     }
     async function openReport(r) {
-      if (!s.privKey) return toast("افتح مفتاح التشفير أولًا");
+      if (!s.privKey) return toast(tr("افتح مفتاح التشفير أولًا", "Unlock the encryption key first"));
       try {
         const { key, payload } = await KocCrypto.decryptReport(s.privKey, r);
         const photos = [];
@@ -290,7 +320,7 @@ createApp({
         }
         s.opened[r.id] = { ...payload, photos };
         if (r.status === "new") await setReportStatus(r, "received");
-      } catch (e) { toast("تعذّر فك التشفير: المفتاح لا يطابق هذا البلاغ"); }
+      } catch (e) { toast(tr("تعذّر فك التشفير: المفتاح لا يطابق هذا البلاغ", "Couldn’t decrypt: the key doesn’t match this report")); }
     }
     async function setReportStatus(r, st) { const { error } = await sb.from("reports").update({ status: st }).eq("id", r.id); if (!error) r.status = st; }
 
@@ -309,11 +339,12 @@ createApp({
     onMounted(async () => {
       const { data } = await sb.auth.getSession(); s.session = data.session;
       sb.auth.onAuthStateChange((_e, sess) => { const was = !!s.session; s.session = sess; if (sess && !was) boot(); });
+      applyLang();
       if (s.session) boot();
       setInterval(() => { s._tick = Date.now(); }, 30000);
     });
 
-    return { s, NAV, KINDS, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
+    return { s, NAV, KINDS, tr, L, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
       newItem, editItem, startDraw, cancelDraw, parseCoords, useMyGps, saveItem, deleteItem, focus, fitAll,
       targets, setKind, reach, launch, closeAlarm, alarmRoster, counts, selAlarmObj, activeAlarms,
       newPerson, savePerson, updatePerson, callPerson, hangup, toggleMute,

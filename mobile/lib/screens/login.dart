@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../ui.dart';
+import '../i18n.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,9 +24,9 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await Supabase.instance.client.auth.signInWithPassword(email: _email.text.trim(), password: _pass.text);
     } on AuthException {
-      setState(() => _err = 'تعذّر الدخول. تحقق من البريد وكلمة المرور المستلمة من فريق ORT.');
+      setState(() => _err = tr('تعذّر الدخول. تحقق من البريد وكلمة المرور المستلمة من فريق ORT.', 'Sign-in failed. Check the email and password you received from ORT.'));
     } catch (_) {
-      setState(() => _err = 'لا يوجد اتصال بالشبكة.');
+      setState(() => _err = tr('لا يوجد اتصال بالشبكة.', 'No network connection.'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -42,25 +43,33 @@ class _LoginScreenState extends State<LoginScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const Wordmark(size: 44, color: Colors.white),
+                Row(children: [
+                  const Wordmark(size: 44, color: Colors.white),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: Lang.I.toggle,
+                    style: TextButton.styleFrom(backgroundColor: Colors.white24, foregroundColor: Colors.white),
+                    child: Text(Lang.I.isEn ? 'العربية' : 'English'),
+                  ),
+                ]),
                 const SizedBox(height: 8),
-                const Text('سلامتك أولًا — الإنذار والحصر وبلاغات 160 في تطبيق واحد',
+                Text(tr('سلامتك أولًا — الإنذار والحصر وبلاغات 160 في تطبيق واحد', 'Your safety first — alarms, muster and 160 reports in one app'),
                     style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600, height: 1.5)),
                 const SizedBox(height: 28),
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    const Align(alignment: AlignmentDirectional.centerStart, child: Tag('تسجيل الدخول')),
+                    Align(alignment: AlignmentDirectional.centerStart, child: Tag(tr('تسجيل الدخول', 'Sign in'))),
                     const SizedBox(height: 8),
-                    const Text('بالحساب الذي أصدره لك فريق ORT', style: TextStyle(color: C.muted)),
+                    Text(tr('بالحساب الذي أصدره لك فريق ORT', 'With the account ORT issued to you'), style: const TextStyle(color: C.muted)),
                     const SizedBox(height: 16),
-                    TextField(controller: _email, keyboardType: TextInputType.emailAddress, textDirection: TextDirection.ltr, decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
+                    TextField(controller: _email, keyboardType: TextInputType.emailAddress, textDirection: TextDirection.ltr, decoration: InputDecoration(labelText: tr('البريد الإلكتروني', 'Email'))),
                     const SizedBox(height: 12),
-                    TextField(controller: _pass, obscureText: true, textDirection: TextDirection.ltr, decoration: const InputDecoration(labelText: 'كلمة المرور'), onSubmitted: (_) => _login()),
+                    TextField(controller: _pass, obscureText: true, textDirection: TextDirection.ltr, decoration: InputDecoration(labelText: tr('كلمة المرور', 'Password')), onSubmitted: (_) => _login()),
                     if (_err != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_err!, style: const TextStyle(color: C.bad))),
                     const SizedBox(height: 18),
-                    FilledButton(onPressed: _busy ? null : _login, style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)), child: Text(_busy ? 'جارٍ الدخول…' : 'دخول')),
+                    FilledButton(onPressed: _busy ? null : _login, style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)), child: Text(_busy ? tr('جارٍ الدخول…', 'Signing in…') : tr('دخول', 'Sign in'))),
                   ]),
                 ),
               ]),
