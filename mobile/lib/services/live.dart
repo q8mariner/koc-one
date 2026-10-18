@@ -53,6 +53,16 @@ class LiveService extends ChangeNotifier {
     await sb.from('profiles').update({'online': true, 'last_seen': DateTime.now().toUtc().toIso8601String()}).eq('id', uid);
     notifyListeners();
     _insist(); // alarms the background service already delivered while the app was closed
+    _openRingingCall(); // a call the background service is ringing for
+  }
+
+  Future<void> _openRingingCall() async {
+    try {
+      final since = DateTime.now().toUtc().subtract(const Duration(seconds: 70)).toIso8601String();
+      final c = await sb.from('calls').select().eq('callee_id', uid).eq('status', 'ringing').gte('created_at', since)
+          .order('created_at', ascending: false).limit(1).maybeSingle();
+      if (c != null) onIncomingCall?.call(c);
+    } catch (_) {}
   }
 
   /// One registered device per account; the native service uses this token while the app is closed.
@@ -131,7 +141,7 @@ class LiveService extends ChangeNotifier {
             callback: (p) {
               final c = Map<String, dynamic>.from(p.newRecord);
               if (c['status'] != 'ringing') return;
-              Notify.incomingCall(c['id'], c['caller_name'] ?? 'ORT · 160');
+              NativeAlarm.bringToFront(); // the call screen rings natively (CallKit) over any app
               onIncomingCall?.call(c);
             })
         .onPostgresChanges(

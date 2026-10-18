@@ -41,4 +41,10 @@ class NativeAlarm {
   static Future<void> unregisterDevice() => _call('unregisterDevice');
   static Future<void> stop() => _call('stop');
   static Future<void> bringToFront() => _call('bringToFront');
+
+  // ORT voice calls: ringtone until answered, call audio (loudspeaker, full call volume) while connected
+  static Future<void> startRinging(String id) => _call('startRinging', {'id': id});
+  static Future<void> stopRinging() => _call('stopRinging');
+  static Future<void> callAudioStart() => _call('callAudioStart');
+  static Future<void> callAudioStop() => _call('callAudioStop');
 }

@@ -329,3 +329,13 @@ language sql security definer set search_path = public as $$
   select p_alarm, d.user_id, 'received' from public.device_tokens d where d.token = p_token
   on conflict (alarm_id, user_id) do nothing;
 $$;
+
+-- Ringing ORT call for a device (the background service rings even when the app is closed)
+create or replace function public.pending_calls(p_token uuid)
+returns table (id uuid, caller_name text, created_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select c.id, c.caller_name, c.created_at
+  from public.calls c join public.device_tokens d on d.user_id = c.callee_id
+  where d.token = p_token and c.status = 'ringing' and c.created_at > now() - interval '70 seconds'
+  order by c.created_at desc limit 1;
+$$;

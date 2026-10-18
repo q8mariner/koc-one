@@ -27,7 +27,7 @@ class AlarmWatchService : Service() {
     companion object {
         const val PREFS = "one_native"
         private const val FG_ID = 1601
-        private const val INTERVAL_MS = 20_000L
+        private const val INTERVAL_MS = 5_000L   // calls every 5 s, alarms every 4th tick (20 s)
 
         fun start(ctx: Context) {
             val i = Intent(ctx, AlarmWatchService::class.java)
@@ -43,9 +43,14 @@ class AlarmWatchService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
     private val exec = Executors.newSingleThreadExecutor()
+    private var ticks = 0
     private val tick = object : Runnable {
         override fun run() {
-            exec.execute { poll() }
+            val n = ticks++
+            exec.execute {
+                pollCalls()
+                if (n % 4 == 0) poll()
+            }
             handler.postDelayed(this, INTERVAL_MS)
         }
     }
@@ -127,6 +132,49 @@ class AlarmWatchService : Service() {
         val set = (prefs().getStringSet("shown", emptySet()) ?: emptySet()).toMutableList()
         set.add(id)
         prefs().edit().putStringSet("shown", set.takeLast(60).toSet()).apply()
+    }
+
+    /** Ringing ORT call → ringtone + full-screen call notification + open the app on the call screen. */
+    private fun pollCalls() {
+        val p = prefs()
+        val token = p.getString("token", null) ?: return
+        val base = p.getString("url", null) ?: return
+        val key = p.getString("key", null) ?: return
+        val raw = rpc(base, key, "pending_calls", JSONObject().put("p_token", token)) ?: return
+        val arr = try { JSONArray(raw) } catch (_: Exception) { return }
+        val c = arr.optJSONObject(0)
+        if (c == null) {
+            // answered elsewhere, missed or cancelled → stop ringing (only what the service started)
+            if (CallKit.ringingCallId != null && CallKit.notifId != 0) CallKit.stopRinging(this)
+            return
+        }
+        val id = c.optString("id")
+        if (id == CallKit.ringingCallId) return
+        val caller = if (c.isNull("caller_name")) "ORT · 160" else c.optString("caller_name")
+        if (Build.VERSION.SDK_INT >= 26 && nm().getNotificationChannel("one_calls") == null) {
+            val ch = NotificationChannel("one_calls", "ORT calls · مكالمات ORT", NotificationManager.IMPORTANCE_HIGH)
+            ch.setSound(null, null) // the ringtone is played by CallKit
+            nm().createNotificationChannel(ch)
+        }
+        val i = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra("call_id", id)
+        val pi = PendingIntent.getActivity(this, id.hashCode(), i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val notifId = (id.hashCode() and 0x7fffffff) or 1
+        val b = builder("one_calls")
+            .setSmallIcon(applicationInfo.icon)
+            .setContentTitle(tr("مكالمة من ", "Call from ") + caller)
+            .setContentText(tr("اضغط للرد — مركز 160", "Tap to answer — 160 centre"))
+            .setCategory(Notification.CATEGORY_CALL)
+            .setOngoing(true)
+            .setContentIntent(pi)
+            .setFullScreenIntent(pi, true)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+        if (Build.VERSION.SDK_INT < 26) legacyMaxPriority(b)
+        nm().notify(notifId, b.build())
+        CallKit.startRinging(this, id)
+        CallKit.notifId = notifId
+        try { startActivity(i) } catch (_: Exception) {}
     }
 
     private fun poll() {

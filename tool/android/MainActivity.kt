@@ -68,6 +68,10 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "bringToFront" -> { bringToFront(); result.success(null) }
+                    "startRinging" -> { CallKit.startRinging(this, call.argument<String>("id")); result.success(null) }
+                    "stopRinging" -> { CallKit.stopRinging(this); result.success(null) }
+                    "callAudioStart" -> { CallKit.audioStart(this); result.success(null) }
+                    "callAudioStop" -> { CallKit.audioStop(this); result.success(null) }
                     "registerDevice" -> {
                         getSharedPreferences(AlarmWatchService.PREFS, Context.MODE_PRIVATE).edit()
                             .putString("token", call.argument<String>("token"))

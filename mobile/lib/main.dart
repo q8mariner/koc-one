@@ -43,8 +43,15 @@ void closeAlarmScreen(String alarmId) {
   if (_openAlarmId == alarmId) navKey.currentState?.popUntil((r) => r.settings.name != '/alarm');
 }
 
+String? _openCallId;
+
 void openCall(Map<String, dynamic> c) {
-  navKey.currentState?.push(MaterialPageRoute(builder: (_) => IncomingCallScreen(call: c)));
+  final id = c['id'] as String?;
+  if (id == null || id == _openCallId) return; // already showing this call
+  _openCallId = id;
+  navKey.currentState?.push(MaterialPageRoute(builder: (_) => IncomingCallScreen(call: c))).then((_) {
+    if (_openCallId == id) _openCallId = null;
+  });
 }
 
 Future<void> _routePayload(String? payload) async {

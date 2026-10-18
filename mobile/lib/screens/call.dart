@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/call.dart';
+import '../services/native_alarm.dart';
 import '../i18n.dart';
 import '../ui.dart';
 
@@ -30,6 +31,25 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         'rejected': tr('رُفضت المكالمة', 'Call declined'),
       };
 
+  Timer? _watch;
+
+  @override
+  void initState() {
+    super.initState();
+    NativeAlarm.startRinging(widget.call['id'] as String);
+    // ORT may hang up or the call may time out before the employee answers → close the screen
+    _watch = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (_state != 'ringing') return;
+      try {
+        final r = await Supabase.instance.client.from('calls').select('status').eq('id', widget.call['id']).maybeSingle();
+        if (r == null || r['status'] != 'ringing') {
+          await NativeAlarm.stopRinging();
+          _onState('ended');
+        }
+      } catch (_) {}
+    });
+  }
+
   void _onState(String s) {
     if (!mounted) return;
     setState(() => _state = s);
@@ -47,6 +67,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _watch?.cancel();
+    NativeAlarm.stopRinging();
     if (_state == 'connected' || _state == 'connecting') _s.end();
     super.dispose();
   }
