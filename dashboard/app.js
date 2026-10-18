@@ -392,7 +392,7 @@ createApp({
       setInterval(() => { s._tick = Date.now(); }, 30000);
     });
 
-    return { s, L: lt, avatar, editPerson, pickPhoto, savePersonEdit, verifyId, NAV, ITEM_TYPES, KINDS, tr, L, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
+    return { s, L: lt, avatar, editPerson, pickPhoto, savePersonEdit, verifyId, NAV, ITEM_TYPES, KINDS, tr, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
       newItem, editItem, startDraw, cancelDraw, parseCoords, useMyGps, saveItem, deleteItem, focus, fitAll,
       targets, setKind, reach, launch, closeAlarm, alarmRoster, counts, selAlarmObj, activeAlarms,
       newPerson, savePerson, updatePerson, callPerson, hangup, toggleMute,
