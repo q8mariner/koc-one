@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'native_alarm.dart';
+
 typedef TapHandler = void Function(String? payload);
 
 class Notify {
@@ -24,19 +26,19 @@ class Notify {
       onDidReceiveNotificationResponse: (r) => onTap?.call(r.payload),
     );
     final android = plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    for (final e in _channels.entries) {
-      final isSignal = e.value.$2 != null;
+    // Signal channels (alarm tone, DND bypass) are created natively; only messages & calls here.
+    for (final key in ['koc_msg', 'koc_call']) {
       await android?.createNotificationChannel(AndroidNotificationChannel(
-        e.key,
-        e.value.$1,
-        description: e.value.$1,
+        key,
+        _channels[key]!.$1,
+        description: _channels[key]!.$1,
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
-        sound: isSignal ? RawResourceAndroidNotificationSound(e.value.$2!) : null,
-        audioAttributesUsage: isSignal || e.key == 'koc_call' ? AudioAttributesUsage.alarm : AudioAttributesUsage.notification,
+        audioAttributesUsage: key == 'koc_call' ? AudioAttributesUsage.alarm : AudioAttributesUsage.notification,
       ));
     }
+    await NativeAlarm.ensureChannels();
   }
 
   static Future<String?> launchPayload() async {
@@ -53,8 +55,8 @@ class Notify {
   static int _id(String s) => s.hashCode & 0x7fffffff;
 
   static Future<void> alarm(String alarmId, String kind, String title, String body) async {
-    final channel = _channels.containsKey(kind) ? kind : 'koc_msg';
     final isSignal = kind.startsWith('signal');
+    final channel = isSignal ? 'koc_${kind}_${NativeAlarm.channelSuffix}' : 'koc_msg';
     await plugin.show(
       _id(alarmId),
       title,
@@ -62,7 +64,7 @@ class Notify {
       NotificationDetails(
         android: AndroidNotificationDetails(
           channel,
-          _channels[channel]!.$1,
+          (_channels[kind] ?? _channels['koc_msg']!).$1,
           importance: Importance.max,
           priority: Priority.max,
           category: isSignal ? AndroidNotificationCategory.alarm : AndroidNotificationCategory.message,

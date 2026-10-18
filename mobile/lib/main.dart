@@ -29,8 +29,9 @@ String? _openAlarmId; // alarm currently shown full-screen
 void openAlarm(Map<String, dynamic> a) {
   final nav = navKey.currentState;
   if (nav == null) return;
-  if (_openAlarmId != null) nav.popUntil((r) => r.settings.name != '/alarm');
   final id = a['id'] as String;
+  if (_openAlarmId == id) return; // already showing
+  if (_openAlarmId != null) nav.popUntil((r) => r.settings.name != '/alarm');
   _openAlarmId = id;
   nav.push(MaterialPageRoute(settings: const RouteSettings(name: '/alarm'), builder: (_) => AlarmScreen(alarm: a))).then((_) {
     if (_openAlarmId == id) _openAlarmId = null;

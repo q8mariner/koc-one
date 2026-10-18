@@ -17,7 +17,7 @@ perms = [
     "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION",
     "POST_NOTIFICATIONS", "USE_FULL_SCREEN_INTENT", "VIBRATE", "WAKE_LOCK", "RECEIVE_BOOT_COMPLETED",
     "ACCESS_NOTIFICATION_POLICY", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "CAMERA",
-    "BLUETOOTH", "BLUETOOTH_CONNECT",
+    "BLUETOOTH", "BLUETOOTH_CONNECT", "SYSTEM_ALERT_WINDOW",
 ]
 block = "\n".join(f'    <uses-permission android:name="android.permission.{p}"/>' for p in perms if f"permission.{p}\"" not in m)
 m = m.replace("<application", block + "\n    <application", 1)
@@ -58,6 +58,13 @@ wp = android / "gradle/wrapper/gradle-wrapper.properties"
 w = wp.read_text()
 w = re.sub(r"gradle-[\d.]+-(all|bin)\.zip", "gradle-8.12-all.zip", w)
 wp.write_text(w)
+
+# ── Native alarm layer (MainActivity.kt) ──
+for old in (app / "src/main").rglob("MainActivity.*"):
+    old.unlink()
+dest = app / "src/main/kotlin/com/koc/koc_one/MainActivity.kt"
+dest.parent.mkdir(parents=True, exist_ok=True)
+shutil.copy(pathlib.Path(__file__).with_name("MainActivity.kt"), dest)
 
 # ── Notification channel tones ──
 raw = app / "src/main/res/raw"

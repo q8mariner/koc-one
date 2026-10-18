@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../geo.dart';
+import 'native_alarm.dart';
 import 'notify.dart';
 
 final sb = Supabase.instance.client;
@@ -54,6 +55,7 @@ class LiveService extends ChangeNotifier {
     _started = false;
     await _posSub?.cancel();
     _poll?.cancel();
+    await NativeAlarm.stop();
     for (final c in _channels) {
       await sb.removeChannel(c);
     }
@@ -132,7 +134,31 @@ class LiveService extends ChangeNotifier {
         .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'buildings', callback: (_) => _reloadAreas())));
     // Safety net: re-check active alarms every 15 s in case a realtime event was missed
     // (network change, Doze, server reconnect).
-    _poll = Timer.periodic(const Duration(seconds: 15), (_) => _pollAlarms());
+    _poll = Timer.periodic(const Duration(seconds: 15), (_) {
+      _pollAlarms();
+      _insist();
+    });
+  }
+
+  String? _soundingId; // alarm whose tone is playing
+
+  /// Mandatory response: while an active evacuation/emergency alarm for me has no status,
+  /// keep pulling the alarm screen to the front and keep the tone going.
+  void _insist() {
+    for (final a in activeAlarms) {
+      final id = a['id'] as String;
+      final st = myStatus[id];
+      if (!_handled.contains(id) || a['kind'] == 'message' || a['kind'] == 'signal3') continue;
+      if (st != null && st != 'received') continue;
+      if (_soundingId != id) {
+        _soundingId = id;
+        NativeAlarm.start(a['kind'] as String);
+      } else {
+        NativeAlarm.bringToFront();
+      }
+      onAlarm?.call(a);
+      return;
+    }
   }
 
   RealtimeChannel _watch(RealtimeChannel ch) {
@@ -150,6 +176,10 @@ class LiveService extends ChangeNotifier {
     if (a['active'] == true) activeAlarms.insert(0, a);
     if (a['active'] == false) {
       Notify.cancelAlarm(a['id']);
+      if (_soundingId == a['id']) {
+        _soundingId = null;
+        NativeAlarm.stop();
+      }
       onAllClear?.call(a['id']);
     }
     notifyListeners();
@@ -214,6 +244,8 @@ class LiveService extends ChangeNotifier {
     Notify.alarm(id, kind, '${a['title']}$drill', '${areaLabel()}\n${a['body'] ?? ''}');
     if (kind != 'message') {
       ack(id, 'received');
+      _soundingId = id;
+      NativeAlarm.start(kind, loop: kind != 'signal3');
       // Signal 3 (all clear) also opens its own green screen with the steady tone,
       // replacing any open emergency/evacuation screen.
       onAlarm?.call(a);
@@ -224,7 +256,13 @@ class LiveService extends ChangeNotifier {
   Future<void> ack(String alarmId, String status) async {
     if (status != 'received' || !myStatus.containsKey(alarmId)) myStatus[alarmId] = status;
     notifyListeners();
-    if (status != 'received') await Notify.cancelAlarm(alarmId);
+    if (status != 'received') {
+      await Notify.cancelAlarm(alarmId);
+      if (_soundingId == alarmId) {
+        _soundingId = null;
+        await NativeAlarm.stop();
+      }
+    }
     try {
       await sb.from('alarm_acks').upsert({
         'alarm_id': alarmId,

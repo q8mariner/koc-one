@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
 import '../services/live.dart';
+import '../services/native_alarm.dart';
 import '../services/notify.dart';
 import 'alarm.dart';
 import 'report.dart';
@@ -27,6 +28,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final live = LiveService.I;
   bool _permsOk = true;
+  Map<String, bool> _native = const {'dnd': true, 'overlay': true, 'fullScreen': true};
   String? _startErr;
 
   @override
@@ -71,7 +73,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _checkPerms() async {
     final ok = await Permission.notification.isGranted && await Permission.location.isGranted;
-    if (mounted) setState(() => _permsOk = ok);
+    final native = await NativeAlarm.status();
+    await NativeAlarm.ensureChannels(); // re-create channels with DND bypass once access is granted
+    if (mounted) {
+      setState(() {
+        _permsOk = ok;
+        _native = native;
+      });
+    }
+  }
+
+  Widget _alarmSetup() {
+    Widget row(String title, String sub, bool done, Future<void> Function() open) => ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(done ? Icons.check_circle : Icons.error, color: done ? const Color(0xFF22C55E) : const Color(0xFFF59E0B)),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Text(sub),
+          trailing: done ? null : FilledButton(onPressed: open, child: const Text('تفعيل')),
+        );
+    return Card(
+      color: const Color(0xFF3B2F05),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('أكمل تجهيز الإنذار ليخترق كل أوضاع الهاتف', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+          row('تجاوز «عدم الإزعاج»', 'يُسمع الإنذار حتى في وضع عدم الإزعاج', _native['dnd']!, NativeAlarm.openDnd),
+          row('الظهور فوق التطبيقات', 'يقطع الإنذار أي تطبيق مفتوح ويظهر فوقه', _native['overlay']!, NativeAlarm.openOverlay),
+          row('إشعارات ملء الشاشة', 'يُضيء الشاشة ويظهر فوق قفلها', _native['fullScreen']!, NativeAlarm.openFullScreen),
+        ]),
+      ),
+    );
   }
 
   Future<void> _logout() async {
@@ -109,6 +140,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           if (!_permsOk)
             _banner('الإنذارات تحتاج إذن الإشعارات والموقع (يُفضّل «السماح طوال الوقت») لتصلك والهاتف مقفل.', const Color(0xFF3B2F05),
                 action: TextButton(onPressed: openAppSettings, child: const Text('الإعدادات'))),
+          if (_native.values.contains(false)) _alarmSetup(),
           for (final a in myActive)
             Card(
               color: kindColor[a['kind']]!.withValues(alpha: .18),
