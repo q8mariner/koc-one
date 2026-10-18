@@ -39,9 +39,11 @@ class _AlarmScreenState extends State<AlarmScreen> {
           audioFocus: AndroidAudioFocus.gainTransient,
         ),
       ));
-      await _player.setReleaseMode(kind == 'signal3' ? ReleaseMode.release : ReleaseMode.loop);
+      await _player.setReleaseMode(ReleaseMode.loop);
       await _player.play(AssetSource('sounds/$kind.wav'), volume: 1.0);
       setState(() => _sounding = true);
+      // the all-clear tone plays for ~12 s, the others loop until the employee responds
+      if (kind == 'signal3') Future.delayed(const Duration(seconds: 12), () { if (mounted) _stopSound(); });
     } catch (_) {}
   }
 

@@ -24,14 +24,22 @@ Future<void> main() async {
   runApp(const KocOneApp());
 }
 
-bool _alarmOpen = false;
+String? _openAlarmId; // alarm currently shown full-screen
 
 void openAlarm(Map<String, dynamic> a) {
   final nav = navKey.currentState;
   if (nav == null) return;
-  if (_alarmOpen) nav.popUntil((r) => r.settings.name != '/alarm');
-  _alarmOpen = true;
-  nav.push(MaterialPageRoute(settings: const RouteSettings(name: '/alarm'), builder: (_) => AlarmScreen(alarm: a))).then((_) => _alarmOpen = false);
+  if (_openAlarmId != null) nav.popUntil((r) => r.settings.name != '/alarm');
+  final id = a['id'] as String;
+  _openAlarmId = id;
+  nav.push(MaterialPageRoute(settings: const RouteSettings(name: '/alarm'), builder: (_) => AlarmScreen(alarm: a))).then((_) {
+    if (_openAlarmId == id) _openAlarmId = null;
+  });
+}
+
+/// Close the full-screen alarm only if it is showing this (now closed) alarm.
+void closeAlarmScreen(String alarmId) {
+  if (_openAlarmId == alarmId) navKey.currentState?.popUntil((r) => r.settings.name != '/alarm');
 }
 
 void openCall(Map<String, dynamic> c) {
@@ -43,7 +51,7 @@ Future<void> _routePayload(String? payload) async {
   final sb = Supabase.instance.client;
   if (payload.startsWith('alarm:')) {
     final a = await sb.from('alarms').select().eq('id', payload.substring(6)).maybeSingle();
-    if (a != null && a['kind'] != 'message' && a['kind'] != 'signal3') openAlarm(a);
+    if (a != null && a['kind'] != 'message') openAlarm(a);
   } else if (payload.startsWith('call:')) {
     final c = await sb.from('calls').select().eq('id', payload.substring(5)).maybeSingle();
     if (c != null && c['status'] == 'ringing') openCall(c);
@@ -91,9 +99,7 @@ class _AuthGateState extends State<AuthGate> {
     super.initState();
     LiveService.I.onAlarm = openAlarm;
     LiveService.I.onIncomingCall = openCall;
-    LiveService.I.onAllClear = (_) {
-      if (_alarmOpen) navKey.currentState?.popUntil((r) => r.settings.name != '/alarm');
-    };
+    LiveService.I.onAllClear = closeAlarmScreen;
     Notify.launchPayload().then(_routePayload);
   }
 

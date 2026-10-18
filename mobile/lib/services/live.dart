@@ -214,12 +214,9 @@ class LiveService extends ChangeNotifier {
     Notify.alarm(id, kind, '${a['title']}$drill', '${areaLabel()}\n${a['body'] ?? ''}');
     if (kind != 'message') {
       ack(id, 'received');
-      if (kind == 'signal3') {
-        // all clear for my area closes any open alarm screens
-        onAllClear?.call(id);
-      } else {
-        onAlarm?.call(a);
-      }
+      // Signal 3 (all clear) also opens its own green screen with the steady tone,
+      // replacing any open emergency/evacuation screen.
+      onAlarm?.call(a);
     }
     notifyListeners();
   }
