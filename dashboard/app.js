@@ -35,6 +35,7 @@ const NAV = [
   { k: "reports", t: { ar: "بلاغات 160", en: "160 reports" }, tag: { ar: "بلاغات مشفرة", en: "Encrypted reports" }, h: { ar: "بلاغات 160 مع الصور", en: "160 reports with photos" }, i: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" },
   { k: "keys", t: { ar: "مفتاح التشفير", en: "Encryption key" }, tag: { ar: "الأمان", en: "Security" }, h: { ar: "مفتاح تشفير البلاغات", en: "Report encryption key" }, i: "M8 15a4 4 0 1 1 3-6.6L21 8v4h-2v2h-2v2h-3l-2.5-2.4A4 4 0 0 1 8 15zm-1-4h.01" },
 ];
+const ITEM_TYPES = { sector: { ar: "قطاع", en: "sector" }, zone: { ar: "Zone", en: "zone" }, building: { ar: "مبنى", en: "building" } };
 const CLASSES = { unclassified: { ar: "غير مصنفة", en: "Unclassified" }, zone2: { ar: "Zone 2", en: "Zone 2" }, zone1: { ar: "Zone 1", en: "Zone 1" }, zone0: { ar: "Zone 0", en: "Zone 0" } };
 const REPORT_TYPES = { fire: { ar: "حريق", en: "Fire" }, leak: { ar: "تسرب غاز/نفط", en: "Gas/oil leak" }, injury: { ar: "إصابة", en: "Injury" },
   road: { ar: "حادث طريق", en: "Road accident" }, suspicious: { ar: "نشاط مشبوه", en: "Suspicious activity" }, hazard: { ar: "خطر سلامة", en: "Safety hazard" }, sos: { ar: "نداء استغاثة", en: "SOS" } };
@@ -344,7 +345,7 @@ createApp({
       setInterval(() => { s._tick = Date.now(); }, 30000);
     });
 
-    return { s, NAV, KINDS, tr, L, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
+    return { s, NAV, ITEM_TYPES, KINDS, tr, L, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
       newItem, editItem, startDraw, cancelDraw, parseCoords, useMyGps, saveItem, deleteItem, focus, fitAll,
       targets, setKind, reach, launch, closeAlarm, alarmRoster, counts, selAlarmObj, activeAlarms,
       newPerson, savePerson, updatePerson, callPerson, hangup, toggleMute,

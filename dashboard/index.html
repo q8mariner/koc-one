@@ -158,7 +158,7 @@
         <template v-if="s.tab==='structure'">
           <div class="row"><h2 class="sec">{{ tr('القطاعات · Zones · المباني', 'Sectors · Zones · Buildings') }}</h2><button class="btn sm primary" @click="newItem('sector')">+ {{ tr('قطاع', 'Sector') }}</button></div>
           <div v-if="s.edit" class="editor">
-            <h3>{{ s.edit.id ? tr('تعديل', 'Edit') : tr('إضافة', 'Add') }} {{ L({sector:{ar:'قطاع',en:'sector'}, zone:{ar:'Zone',en:'zone'}, building:{ar:'مبنى',en:'building'}}[s.edit.type]) }}</h3>
+            <h3>{{ s.edit.id ? tr('تعديل', 'Edit') : tr('إضافة', 'Add') }} {{ L(ITEM_TYPES[s.edit.type]) }}</h3>
             <label for="nm">{{ tr('الاسم', 'Name') }}</label><input id="nm" v-model="s.edit.name">
             <template v-if="s.edit.type==='sector'"><label for="clr">{{ tr('اللون على الخريطة', 'Map colour') }}</label><input id="clr" type="color" v-model="s.edit.color"></template>
             <template v-if="s.edit.type==='zone'">
