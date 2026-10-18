@@ -34,7 +34,6 @@ class LiveService extends ChangeNotifier {
   void Function(String alarmId)? onAllClear;
 
   StreamSubscription<Position>? _posSub;
-  RealtimeChannel? _ch;
   bool _started = false;
 
   String get uid => sb.auth.currentUser!.id;
@@ -54,7 +53,11 @@ class LiveService extends ChangeNotifier {
   Future<void> stop() async {
     _started = false;
     await _posSub?.cancel();
-    if (_ch != null) await sb.removeChannel(_ch!);
+    _poll?.cancel();
+    for (final c in _channels) {
+      await sb.removeChannel(c);
+    }
+    _channels.clear();
     try {
       await sb.from('profiles').update({'online': false}).eq('id', uid);
     } catch (_) {}
@@ -86,9 +89,12 @@ class LiveService extends ChangeNotifier {
     activeAlarms = List<Map<String, dynamic>>.from(act);
   }
 
+  final List<RealtimeChannel> _channels = [];
+  Timer? _poll;
+
   void _subscribe() {
-    _ch = sb
-        .channel('employee-$uid')
+    // Separate channels: a problem with one subscription can never block alarm delivery.
+    _channels.add(_watch(sb.channel('alarms-$uid')
         .onPostgresChanges(
             event: PostgresChangeEvent.insert,
             schema: 'public',
@@ -98,16 +104,8 @@ class LiveService extends ChangeNotifier {
             event: PostgresChangeEvent.update,
             schema: 'public',
             table: 'alarms',
-            callback: (p) {
-              final a = Map<String, dynamic>.from(p.newRecord);
-              activeAlarms.removeWhere((x) => x['id'] == a['id']);
-              if (a['active'] == true) activeAlarms.insert(0, a);
-              if (a['active'] == false) {
-                Notify.cancelAlarm(a['id']);
-                onAllClear?.call(a['id']);
-              }
-              notifyListeners();
-            })
+            callback: (p) => _onAlarmUpdate(Map<String, dynamic>.from(p.newRecord)))));
+    _channels.add(_watch(sb.channel('calls-$uid')
         .onPostgresChanges(
             event: PostgresChangeEvent.insert,
             schema: 'public',
@@ -127,23 +125,52 @@ class LiveService extends ChangeNotifier {
             callback: (p) {
               final c = p.newRecord;
               if (c['status'] != 'ringing') Notify.cancelCall(c['id']);
-            })
-        .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'sectors',
-            callback: (_) => _reloadAreas())
-        .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'zones',
-            callback: (_) => _reloadAreas())
-        .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'buildings',
-            callback: (_) => _reloadAreas())
-        .subscribe();
+            })));
+    _channels.add(_watch(sb.channel('areas-$uid')
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'sectors', callback: (_) => _reloadAreas())
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'zones', callback: (_) => _reloadAreas())
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'buildings', callback: (_) => _reloadAreas())));
+    // Safety net: re-check active alarms every 15 s in case a realtime event was missed
+    // (network change, Doze, server reconnect).
+    _poll = Timer.periodic(const Duration(seconds: 15), (_) => _pollAlarms());
+  }
+
+  RealtimeChannel _watch(RealtimeChannel ch) {
+    ch.subscribe((status, err) {
+      if (status == RealtimeSubscribeStatus.channelError || status == RealtimeSubscribeStatus.timedOut) {
+        debugPrint('realtime ${ch.topic}: $status $err');
+        _pollAlarms();
+      }
+    });
+    return ch;
+  }
+
+  void _onAlarmUpdate(Map<String, dynamic> a) {
+    activeAlarms.removeWhere((x) => x['id'] == a['id']);
+    if (a['active'] == true) activeAlarms.insert(0, a);
+    if (a['active'] == false) {
+      Notify.cancelAlarm(a['id']);
+      onAllClear?.call(a['id']);
+    }
+    notifyListeners();
+  }
+
+  Future<void> _pollAlarms() async {
+    if (!_started) return;
+    try {
+      final since = DateTime.now().toUtc().subtract(const Duration(minutes: 3)).toIso8601String();
+      final rows = await sb.from('alarms').select().or('active.eq.true,created_at.gte.$since').order('created_at');
+      final list = List<Map<String, dynamic>>.from(rows);
+      final activeIds = list.where((a) => a['active'] == true).map((a) => a['id']).toSet();
+      for (final gone in activeAlarms.where((a) => !activeIds.contains(a['id'])).toList()) {
+        _onAlarmUpdate({...gone, 'active': false});
+      }
+      for (final a in list) {
+        if (a['active'] == true && !activeAlarms.any((x) => x['id'] == a['id'])) activeAlarms.insert(0, a);
+        _deliverIfApplies(a);
+      }
+      notifyListeners();
+    } catch (_) {}
   }
 
   Future<void> _reloadAreas() async {

@@ -251,3 +251,6 @@ revoke execute on function public.handle_new_user() from public, anon, authentic
 revoke execute on function public.protect_role() from public, anon, authenticated;
 revoke execute on function public.is_ort() from public, anon;
 grant execute on function public.is_ort() to authenticated;
+
+-- Structure tables also stream changes (the app reloads boundaries live)
+alter publication supabase_realtime add table public.sectors, public.zones, public.buildings;
