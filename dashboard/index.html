@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ONE · ORT 160</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#2B4C9B">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -41,7 +45,7 @@
   <!-- ───── Console ───── -->
   <div v-else-if="s.me" class="shell">
     <nav class="rail" role="tablist" :aria-label="tr('الأقسام', 'Sections')">
-      <div class="rail-mark"><b>/</b>ONE</div>
+      <div class="rail-mark"><img src="favicon-192.png" alt="" width="44" height="44"><span><b>/</b>ONE</span></div>
       <button v-for="n in NAV" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k" role="tab" :title="L(n.t)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="n.i"/></svg><span>{{ L(n.t) }}</span>
         <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && kpi.active" class="red">{{ kpi.active }}</em>

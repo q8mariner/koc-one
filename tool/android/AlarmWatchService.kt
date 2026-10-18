@@ -74,6 +74,9 @@ class AlarmWatchService : Service() {
         super.onDestroy()
     }
 
+    /** White "/1" notification icon (falls back to the launcher icon). */
+    private fun statIcon(): Int = resources.getIdentifier("ic_stat_one", "drawable", packageName).takeIf { it != 0 } ?: applicationInfo.icon
+
     private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private fun isEn() = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE).getString("flutter.one.lang", "ar") == "en"
     private fun tr(ar: String, en: String) = if (isEn()) en else ar
@@ -95,7 +98,7 @@ class AlarmWatchService : Service() {
             nm().createNotificationChannel(NotificationChannel("one_watch", "ONE · protection · الحماية", NotificationManager.IMPORTANCE_MIN))
         }
         val n = builder("one_watch")
-            .setSmallIcon(applicationInfo.icon)
+            .setSmallIcon(statIcon())
             .setContentTitle(tr("ONE · الحماية مفعّلة", "ONE · protection on"))
             .setContentText(tr("تصلك الإنذارات حتى والتطبيق مغلق", "Alarms reach you even when the app is closed"))
             .setOngoing(true)
@@ -162,7 +165,7 @@ class AlarmWatchService : Service() {
         val pi = PendingIntent.getActivity(this, id.hashCode(), i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notifId = (id.hashCode() and 0x7fffffff) or 1
         val b = builder("one_calls")
-            .setSmallIcon(applicationInfo.icon)
+            .setSmallIcon(statIcon())
             .setContentTitle(tr("مكالمة من ", "Call from ") + caller)
             .setContentText(tr("اضغط للرد — مركز 160", "Tap to answer — 160 centre"))
             .setCategory(Notification.CATEGORY_CALL)
@@ -227,7 +230,7 @@ class AlarmWatchService : Service() {
         val notifId = id.hashCode() and 0x7fffffff
         val pi = openAppIntent(id)
         val b = builder(channel)
-            .setSmallIcon(applicationInfo.icon)
+            .setSmallIcon(statIcon())
             .setContentTitle(text(a, "title") + drill)
             .setContentText(text(a, "body"))
             .setStyle(Notification.BigTextStyle().bigText(text(a, "body")))

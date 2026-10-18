@@ -82,6 +82,14 @@ dest.mkdir(parents=True, exist_ok=True)
 for kt in (pathlib.Path(__file__).parent / "android").glob("*.kt"):
     shutil.copy(kt, dest / kt.name)
 
+# ── Brand icons (launcher, adaptive, themed, notification) ──
+res_src = pathlib.Path(__file__).parent / "res"
+for f in res_src.rglob("*"):
+    if f.is_file():
+        out = app / "src/main/res" / f.relative_to(res_src)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(f, out)
+
 # ── Notification channel tones ──
 raw = app / "src/main/res/raw"
 raw.mkdir(parents=True, exist_ok=True)

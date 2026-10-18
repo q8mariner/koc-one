@@ -343,6 +343,7 @@ class LiveService extends ChangeNotifier {
         notificationTitle: tr('ONE · الحماية مفعّلة', 'ONE · protection on'),
         notificationText: tr('يستقبل إنذارات موقعك وتنبيهات الحدود', 'Receiving alarms and boundary alerts for your location'),
         enableWakeLock: true,
+        notificationIcon: const AndroidResource(name: 'ic_stat_one', defType: 'drawable'),
       ),
     );
     _posSub = Geolocator.getPositionStream(locationSettings: settings).listen(_onPosition, onError: (_) {

@@ -23,7 +23,7 @@ class Notify {
 
   static Future<void> init() async {
     await plugin.initialize(
-      const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+      const InitializationSettings(android: AndroidInitializationSettings('@drawable/ic_stat_one')),
       onDidReceiveNotificationResponse: (r) => onTap?.call(r.payload),
     );
     final android = plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
