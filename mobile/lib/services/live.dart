@@ -48,9 +48,21 @@ class LiveService extends ChangeNotifier {
     await _loadAreas();
     await _loadHistory();
     _subscribe();
+    await _registerDevice();
     await _startLocation();
     await sb.from('profiles').update({'online': true, 'last_seen': DateTime.now().toUtc().toIso8601String()}).eq('id', uid);
     notifyListeners();
+    _insist(); // alarms the background service already delivered while the app was closed
+  }
+
+  /// One registered device per account; the native service uses this token while the app is closed.
+  Future<void> _registerDevice() async {
+    try {
+      final token = await sb.rpc('register_device');
+      if (token is String) await NativeAlarm.registerDevice(token);
+    } catch (e) {
+      debugPrint('register_device failed: $e');
+    }
   }
 
   Future<void> stop() async {
@@ -58,6 +70,7 @@ class LiveService extends ChangeNotifier {
     await _posSub?.cancel();
     _poll?.cancel();
     await NativeAlarm.stop();
+    await NativeAlarm.unregisterDevice();
     for (final c in _channels) {
       await sb.removeChannel(c);
     }
@@ -163,7 +176,7 @@ class LiveService extends ChangeNotifier {
       if (st != null && st != 'received') continue;
       if (_soundingId != id) {
         _soundingId = id;
-        NativeAlarm.start(a['kind'] as String);
+        NativeAlarm.start(a['kind'] as String, id: id);
       } else {
         NativeAlarm.bringToFront();
       }
@@ -256,7 +269,7 @@ class LiveService extends ChangeNotifier {
     if (kind != 'message') {
       ack(id, 'received');
       _soundingId = id;
-      NativeAlarm.start(kind, loop: kind != 'signal3');
+      NativeAlarm.start(kind, loop: kind != 'signal3', id: id);
       // Signal 3 (all clear) also opens its own green screen with the steady tone,
       // replacing any open emergency/evacuation screen.
       onAlarm?.call(a);

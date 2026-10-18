@@ -23,7 +23,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final live = LiveService.I;
   bool _permsOk = true;
-  Map<String, bool> _native = const {'dnd': true, 'overlay': true, 'fullScreen': true};
+  Map<String, bool> _native = const {'dnd': true, 'overlay': true, 'fullScreen': true, 'battery': true};
   String? _startErr;
 
   @override
@@ -102,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         row(tr('تجاوز «عدم الإزعاج»', 'Override Do Not Disturb'), tr('يُسمع الإنذار حتى في وضع عدم الإزعاج', 'The alarm sounds even in Do Not Disturb'), _native['dnd']!, NativeAlarm.openDnd),
         row(tr('الظهور فوق التطبيقات', 'Display over other apps'), tr('يقطع الإنذار أي تطبيق مفتوح ويظهر فوقه', 'The alarm interrupts any open app and shows on top'), _native['overlay']!, NativeAlarm.openOverlay),
         row(tr('إشعارات ملء الشاشة', 'Full-screen notifications'), tr('يُضيء الشاشة ويظهر فوق قفلها', 'Turns the screen on and shows over the lock screen'), _native['fullScreen']!, NativeAlarm.openFullScreen),
+        row(tr('العمل في الخلفية دون قيود البطارية', 'Run in background without battery limits'), tr('يصل الإنذار والتطبيق مغلق', 'Alarms arrive while the app is closed'), _native['battery'] ?? true, NativeAlarm.openBattery),
       ]),
     );
   }

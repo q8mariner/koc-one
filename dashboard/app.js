@@ -70,7 +70,7 @@ createApp({
     let map, layers, peopleLayer, drawLayer, caller;
     const toast = (m) => { s.toast = m; setTimeout(() => (s.toast = ""), 3500); };
     const tr = (ar, en) => (s.lang === "en" ? en : ar);
-    const L = (o) => (o && typeof o === "object" ? o[s.lang] ?? o.ar : o);
+    const lt = (o) => (o && typeof o === "object" ? o[s.lang] ?? o.ar : o); // i18n pick (not "L": that is Leaflet)
     const atitle = (a) => (s.lang === "en" && a.title_en ? a.title_en : a.title);
     const curNav = computed(() => NAV.find((n) => n.k === s.tab) || NAV[0]);
     function applyLang() {
@@ -129,7 +129,7 @@ createApp({
         .on("postgres_changes", { event: "*", schema: "public", table: "alarms" }, ({ new: r }) => { r && r.id && upsertLocal(s.alarms, r); })
         .on("postgres_changes", { event: "*", schema: "public", table: "alarm_acks" }, ({ new: r }) => { if (r && r.alarm_id) upsertLocal(s.acks, r, (x) => x.alarm_id + x.user_id); drawPeople(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, ({ new: r }) => { if (r && r.id) { upsertLocal(s.people, r); drawPeople(); } })
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "reports" }, ({ new: r }) => { s.reports.unshift(r); toast(tr("بلاغ جديد وارد إلى 160 — ", "New 160 report — ") + (L(REPORT_TYPES[r.type]) || r.type)); beep(); })
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "reports" }, ({ new: r }) => { s.reports.unshift(r); toast(tr("بلاغ جديد وارد إلى 160 — ", "New 160 report — ") + (lt(REPORT_TYPES[r.type]) || r.type)); beep(); })
         .subscribe();
     }
     function beep() { try { const a = new AudioContext(), o = a.createOscillator(); o.frequency.value = 880; o.connect(a.destination); o.start(); o.stop(a.currentTime + 0.25); } catch (_) {} }
@@ -152,7 +152,7 @@ createApp({
     function drawAreas() {
       if (!layers) return; layers.clearLayers();
       s.sectors.forEach((x) => { const p = poly(x.boundary, { color: x.color, weight: 2, fillOpacity: 0.05, dashArray: "6 6" }); p && p.bindTooltip(tr("قطاع: ", "Sector: ") + x.name).addTo(layers); });
-      s.zones.forEach((x) => { const sec = byId(s.sectors, x.sector_id); const p = poly(x.boundary, { color: x.classification === "unclassified" ? (sec?.color || "#2B4C9B") : "#E07B29", weight: 2, fillOpacity: 0.1 }); p && p.bindTooltip(`${x.name} · ${L(CLASSES[x.classification])}`).addTo(layers); });
+      s.zones.forEach((x) => { const sec = byId(s.sectors, x.sector_id); const p = poly(x.boundary, { color: x.classification === "unclassified" ? (sec?.color || "#2B4C9B") : "#E07B29", weight: 2, fillOpacity: 0.1 }); p && p.bindTooltip(`${x.name} · ${lt(CLASSES[x.classification])}`).addTo(layers); });
       s.buildings.forEach((x) => { const p = poly(x.boundary, { color: "#1F3A7A", weight: 2, fillColor: "#2B4C9B", fillOpacity: 0.18 }); p && p.bindTooltip(tr("مبنى: ", "Building: ") + x.name, { permanent: false }).addTo(layers); });
     }
     function statusFor(uid) {
@@ -166,7 +166,7 @@ createApp({
         const st = statusFor(p.id);
         L.circleMarker([p.last_lat, p.last_lng], { radius: 7, color: "#ffffff", weight: 2, fillColor: STATUS_COLOR[st] || (p.online ? "#2B4C9B" : "#94A3B8"), fillOpacity: 1 })
           .bindPopup(`<b>${esc(p.full_name)}</b><br>${esc(p.employee_no || "")} · ${tr("فصيلة", "Blood")} ${esc(p.blood_type || "—")}<br>${esc(name("building", p.cur_building_id))} · ${tr("آخر ظهور", "last seen")} ${ago(p.last_seen)}<br>
-            ${st ? tr("الحالة: ", "Status: ") + L(STATUS[st][0]) + "<br>" : ""}<button class="mini" onclick="window.__kocCall('${p.id}')">${tr("اتصال صوتي", "Voice call")}</button>`)
+            ${st ? tr("الحالة: ", "Status: ") + lt(STATUS[st][0]) + "<br>" : ""}<button class="mini" onclick="window.__kocCall('${p.id}')">${tr("اتصال صوتي", "Voice call")}</button>`)
           .addTo(peopleLayer);
       });
     }
@@ -247,7 +247,7 @@ createApp({
       if (error) return toast(tr("تعذّر الإطلاق: ", "Launch failed: ") + error.message);
       if (a.kind === "signal3") await sb.from("alarms").update({ active: false, closed_at: new Date().toISOString() }).eq("active", true).eq("scope", a.scope).filter("target_id", a.scope === "all" ? "is" : "eq", a.scope === "all" ? null : a.target_id);
       upsertLocal(s.alarms, data); if (data.active) s.selAlarm = data.id;
-      a.confirm = false; a.second = ""; toast(`${tr("أُطلق", "Launched")}: ${atitle(data)} → ${L(SCOPES[data.scope])}${data.scope !== "all" ? " · " + name(data.scope, data.target_id) : ""}`);
+      a.confirm = false; a.second = ""; toast(`${tr("أُطلق", "Launched")}: ${atitle(data)} → ${lt(SCOPES[data.scope])}${data.scope !== "all" ? " · " + name(data.scope, data.target_id) : ""}`);
       await loadAll();
     }
     async function closeAlarm(al, allClear) {
@@ -392,7 +392,7 @@ createApp({
       setInterval(() => { s._tick = Date.now(); }, 30000);
     });
 
-    return { s, avatar, editPerson, pickPhoto, savePersonEdit, verifyId, NAV, ITEM_TYPES, KINDS, tr, L, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
+    return { s, L: lt, avatar, editPerson, pickPhoto, savePersonEdit, verifyId, NAV, ITEM_TYPES, KINDS, tr, L, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
       newItem, editItem, startDraw, cancelDraw, parseCoords, useMyGps, saveItem, deleteItem, focus, fitAll,
       targets, setKind, reach, launch, closeAlarm, alarmRoster, counts, selAlarmObj, activeAlarms,
       newPerson, savePerson, updatePerson, callPerson, hangup, toggleMute,

@@ -18,12 +18,27 @@ perms = [
     "POST_NOTIFICATIONS", "USE_FULL_SCREEN_INTENT", "VIBRATE", "WAKE_LOCK", "RECEIVE_BOOT_COMPLETED",
     "ACCESS_NOTIFICATION_POLICY", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "CAMERA",
     "BLUETOOTH", "BLUETOOTH_CONNECT", "SYSTEM_ALERT_WINDOW",
+    "FOREGROUND_SERVICE_SPECIAL_USE", "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
 ]
 block = "\n".join(f'    <uses-permission android:name="android.permission.{p}"/>' for p in perms if f"permission.{p}\"" not in m)
 m = m.replace("<application", block + "\n    <application", 1)
 m = re.sub(r'android:label="[^"]*"', 'android:label="ONE"', m, count=1)
 if "showWhenLocked" not in m:
     m = m.replace('android:name=".MainActivity"', 'android:name=".MainActivity"\n            android:showWhenLocked="true"\n            android:turnScreenOn="true"', 1)
+# background alarm service (works while the app is closed) + restart after reboot / update
+if "AlarmWatchService" not in m:
+    comps = """
+        <service android:name=".AlarmWatchService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Emergency alarm delivery for employee safety"/>
+        </service>
+        <receiver android:name=".BootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
+    </application>"""
+    m = m.replace("</application>", comps, 1)
 manifest.write_text(m)
 
 # ── App build file ──
@@ -59,12 +74,13 @@ w = wp.read_text()
 w = re.sub(r"gradle-[\d.]+-(all|bin)\.zip", "gradle-8.12-all.zip", w)
 wp.write_text(w)
 
-# ── Native alarm layer (MainActivity.kt) ──
+# ── Native alarm layer (MainActivity, AlarmKit, AlarmWatchService, BootReceiver) ──
 for old in (app / "src/main").rglob("MainActivity.*"):
     old.unlink()
-dest = app / "src/main/kotlin/com/koc/koc_one/MainActivity.kt"
-dest.parent.mkdir(parents=True, exist_ok=True)
-shutil.copy(pathlib.Path(__file__).with_name("MainActivity.kt"), dest)
+dest = app / "src/main/kotlin/com/koc/koc_one"
+dest.mkdir(parents=True, exist_ok=True)
+for kt in (pathlib.Path(__file__).parent / "android").glob("*.kt"):
+    shutil.copy(kt, dest / kt.name)
 
 # ── Notification channel tones ──
 raw = app / "src/main/res/raw"

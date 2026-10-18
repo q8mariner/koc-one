@@ -285,3 +285,47 @@ create policy "ort updates photos" on storage.objects for update to authenticate
 create policy "ort deletes photos" on storage.objects for delete to authenticated using (bucket_id = 'avatars' and public.is_ort());
 create policy "own or ort reads photo" on storage.objects for select to authenticated
   using (bucket_id = 'avatars' and (public.is_ort() or (storage.foldername(name))[1] = auth.uid()::text));
+
+-- ───────── Background alarm delivery while the app is closed ─────────
+-- The native Android service holds a device token (one per account) and polls pending_alarms().
+create table if not exists public.device_tokens (
+  token uuid primary key default gen_random_uuid(),
+  user_id uuid not null unique references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.device_tokens enable row level security;  -- no policies: only the functions below use it
+
+create or replace function public.register_device() returns uuid
+language plpgsql security definer set search_path = public as $$
+declare t uuid;
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  insert into public.device_tokens(user_id) values (auth.uid())
+    on conflict (user_id) do update set token = gen_random_uuid(), created_at = now()
+    returning token into t;
+  return t;
+end $$;
+
+create or replace function public.pending_alarms(p_token uuid)
+returns table (id uuid, kind text, title text, body text, title_en text, body_en text,
+               active boolean, drill boolean, created_at timestamptz, status text)
+language sql stable security definer set search_path = public as $$
+  with u as (select p.* from public.device_tokens d join public.profiles p on p.id = d.user_id where d.token = p_token)
+  select a.id, a.kind, a.title, a.body, a.title_en, a.body_en, a.active, a.drill, a.created_at, k.status
+  from public.alarms a cross join u
+  left join public.alarm_acks k on k.alarm_id = a.id and k.user_id = u.id
+  where (a.active or a.created_at > now() - interval '10 minutes')
+    and ((a.scope = 'employee' and a.target_id = u.id)
+      or (a.scope = 'all' and (u.cur_sector_id is not null or u.cur_zone_id is not null or u.cur_building_id is not null))
+      or (a.scope = 'sector' and a.target_id = u.cur_sector_id)
+      or (a.scope = 'zone' and a.target_id = u.cur_zone_id)
+      or (a.scope = 'building' and a.target_id = u.cur_building_id))
+  order by a.created_at desc limit 20;
+$$;
+
+create or replace function public.device_ack(p_token uuid, p_alarm uuid) returns void
+language sql security definer set search_path = public as $$
+  insert into public.alarm_acks(alarm_id, user_id, status)
+  select p_alarm, d.user_id, 'received' from public.device_tokens d where d.token = p_token
+  on conflict (alarm_id, user_id) do nothing;
+$$;

@@ -1,0 +1,207 @@
+package com.koc.koc_one
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
+
+/**
+ * Keeps delivering alarms when the app is closed (swiped away) or after a reboot.
+ * Every 20 s it asks the server for alarms that apply to this employee's last reported area,
+ * sounds new ones on the alarm stream, shows a full-screen notification and opens the app.
+ */
+class AlarmWatchService : Service() {
+    companion object {
+        const val PREFS = "one_native"
+        private const val FG_ID = 1601
+        private const val INTERVAL_MS = 20_000L
+
+        fun start(ctx: Context) {
+            val i = Intent(ctx, AlarmWatchService::class.java)
+            try {
+                if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i)
+            } catch (_: Exception) {}
+        }
+
+        fun stop(ctx: Context) {
+            ctx.stopService(Intent(ctx, AlarmWatchService::class.java))
+        }
+    }
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val exec = Executors.newSingleThreadExecutor()
+    private val tick = object : Runnable {
+        override fun run() {
+            exec.execute { poll() }
+            handler.postDelayed(this, INTERVAL_MS)
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        goForeground()
+        handler.post(tick)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        goForeground()
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(tick)
+        exec.shutdownNow()
+        super.onDestroy()
+    }
+
+    private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun isEn() = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE).getString("flutter.one.lang", "ar") == "en"
+    private fun tr(ar: String, en: String) = if (isEn()) en else ar
+    private fun nm() = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    private fun openAppIntent(alarmId: String?): PendingIntent {
+        val i = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        if (alarmId != null) i.putExtra("alarm_id", alarmId)
+        return PendingIntent.getActivity(this, alarmId?.hashCode() ?: 0, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun builder(channel: String): Notification.Builder =
+        if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channel) else Notification.Builder(this)
+
+    private fun goForeground() {
+        if (Build.VERSION.SDK_INT >= 26 && nm().getNotificationChannel("one_watch") == null) {
+            nm().createNotificationChannel(NotificationChannel("one_watch", "ONE · protection · الحماية", NotificationManager.IMPORTANCE_MIN))
+        }
+        val n = builder("one_watch")
+            .setSmallIcon(applicationInfo.icon)
+            .setContentTitle(tr("ONE · الحماية مفعّلة", "ONE · protection on"))
+            .setContentText(tr("تصلك الإنذارات حتى والتطبيق مغلق", "Alarms reach you even when the app is closed"))
+            .setOngoing(true)
+            .setContentIntent(openAppIntent(null))
+            .build()
+        try {
+            if (Build.VERSION.SDK_INT >= 34) startForeground(FG_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            else startForeground(FG_ID, n)
+        } catch (_: Exception) {}
+    }
+
+    private fun rpc(base: String, key: String, fn: String, body: JSONObject): String? {
+        var c: HttpURLConnection? = null
+        return try {
+            c = URL("$base/rest/v1/rpc/$fn").openConnection() as HttpURLConnection
+            c.requestMethod = "POST"
+            c.connectTimeout = 10_000
+            c.readTimeout = 10_000
+            c.doOutput = true
+            c.setRequestProperty("apikey", key)
+            c.setRequestProperty("Content-Type", "application/json")
+            c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            if (c.responseCode in 200..299) c.inputStream.bufferedReader().use { it.readText() } else null
+        } catch (_: Exception) {
+            null
+        } finally {
+            c?.disconnect()
+        }
+    }
+
+    private fun wasShown(id: String) = prefs().getStringSet("shown", emptySet())?.contains(id) == true
+
+    private fun markShown(id: String) {
+        val set = (prefs().getStringSet("shown", emptySet()) ?: emptySet()).toMutableList()
+        set.add(id)
+        prefs().edit().putStringSet("shown", set.takeLast(60).toSet()).apply()
+    }
+
+    private fun poll() {
+        val p = prefs()
+        val token = p.getString("token", null) ?: return
+        val base = p.getString("url", null) ?: return
+        val key = p.getString("key", null) ?: return
+        val raw = rpc(base, key, "pending_alarms", JSONObject().put("p_token", token)) ?: return
+        val arr = try { JSONArray(raw) } catch (_: Exception) { return }
+
+        var stillSounding = false
+        for (i in 0 until arr.length()) {
+            val a = arr.optJSONObject(i) ?: continue
+            val id = a.optString("id")
+            val status = if (a.isNull("status")) null else a.optString("status")
+            val active = a.optBoolean("active")
+            if (id == AlarmKit.soundingId && active && (status == null || status == "received")) stillSounding = true
+            // Only alarms nobody has delivered yet (the open app acknowledges its own within a second).
+            if (status == null && !wasShown(id)) {
+                markShown(id)
+                alert(a)
+                rpc(base, key, "device_ack", JSONObject().put("p_token", token).put("p_alarm", id))
+                val kind = a.optString("kind")
+                if (kind == "signal1" || kind == "signal2") stillSounding = true
+            }
+        }
+        // closed alarm, all clear, or the employee answered in the app → silence
+        if (AlarmKit.soundingId != null && !stillSounding) AlarmKit.stop(this)
+    }
+
+    private fun text(a: JSONObject, field: String): String {
+        val en = if (a.isNull("${field}_en")) "" else a.optString("${field}_en")
+        val ar = if (a.isNull(field)) "" else a.optString(field)
+        return if (isEn() && en.isNotBlank()) en else ar
+    }
+
+    @Suppress("DEPRECATION")
+    private fun legacyMaxPriority(b: Notification.Builder) {
+        b.setPriority(Notification.PRIORITY_MAX)
+    }
+
+    private fun alert(a: JSONObject) {
+        val id = a.optString("id")
+        val kind = a.optString("kind")
+        val signal = kind.startsWith("signal")
+        val suffix = if (Build.VERSION.SDK_INT >= 26 && nm().getNotificationChannel("koc_${kind}_dnd") != null) "dnd" else "std"
+        var channel = if (signal) "koc_${kind}_$suffix" else "koc_msg"
+        if (Build.VERSION.SDK_INT >= 26 && nm().getNotificationChannel(channel) == null) channel = "one_watch"
+        val drill = if (a.optBoolean("drill")) tr(" (تمرين)", " (drill)") else ""
+        val notifId = id.hashCode() and 0x7fffffff
+        val pi = openAppIntent(id)
+        val b = builder(channel)
+            .setSmallIcon(applicationInfo.icon)
+            .setContentTitle(text(a, "title") + drill)
+            .setContentText(text(a, "body"))
+            .setStyle(Notification.BigTextStyle().bigText(text(a, "body")))
+            .setContentIntent(pi)
+            .setAutoCancel(!signal || kind == "signal3")
+            .setOngoing(signal && kind != "signal3")
+            .setCategory(if (signal) Notification.CATEGORY_ALARM else Notification.CATEGORY_MESSAGE)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+        if (signal && kind != "signal3") b.setFullScreenIntent(pi, true)
+        if (Build.VERSION.SDK_INT < 26) legacyMaxPriority(b)
+        nm().notify(notifId, b.build())
+
+        if (signal) {
+            AlarmKit.start(this, kind, kind != "signal3")
+            AlarmKit.soundingId = id
+            AlarmKit.serviceNotifId = notifId
+            // Open the app on top (allowed with "Display over other apps"); the full-screen intent covers the lock screen.
+            try {
+                startActivity(Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    .putExtra("alarm_id", id))
+            } catch (_: Exception) {}
+        }
+    }
+}
