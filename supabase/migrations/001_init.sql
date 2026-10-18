@@ -63,7 +63,8 @@ $$;
 create or replace function public.protect_role() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  if not public.is_ort() then new.role := old.role; end if;
+  -- only signed-in end users are restricted; server-side admin code (no auth.uid) may set roles
+  if auth.uid() is not null and not public.is_ort() then new.role := old.role; end if;
   return new;
 end $$;
 create trigger trg_protect_role before update on public.profiles
