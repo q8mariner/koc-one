@@ -24,6 +24,7 @@
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.6 var(--font); }
 [v-cloak] { display: none; }
+#app { height: 100%; }
 button, input, select, textarea { font: inherit; color: inherit; }
 .muted { color: var(--muted); }
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -73,7 +74,7 @@ input[type=color] { width: 56px; height: 34px; border: 1px solid var(--line); ba
 .mini { margin-top: 6px; background: var(--navy); color: #fff; border: 0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font: 600 12px var(--font); }
 
 /* login */
-.login { min-height: 100%; display: grid; place-items: center; padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); background: var(--navy); position: relative; overflow: hidden; }
+.login { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); background: var(--navy); position: relative; overflow: hidden; }
 .login-hero { position: absolute; inset: 0; pointer-events: none; }
 .login-hero i { position: absolute; top: -20%; bottom: -20%; width: 70px; background: var(--yellow); transform: skewX(-22deg); left: 8%; }
 .login-hero i:nth-child(2) { left: calc(8% + 100px); width: 22px; background: #fff; opacity: .9; }
