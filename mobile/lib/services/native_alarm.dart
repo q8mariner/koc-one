@@ -1,4 +1,6 @@
 // Bridge to the native Android alarm layer (tool/MainActivity.kt → android MainActivity).
+import 'dart:io' show Platform;
+
 import 'package:flutter/services.dart';
 
 import '../config.dart';
@@ -17,6 +19,8 @@ class NativeAlarm {
 
   /// {dnd, overlay, fullScreen}
   static Future<Map<String, bool>> status() async {
+    // iPhone: no such switches (Do Not Disturb override, overlay, battery) — nothing to set up
+    if (!Platform.isAndroid) return {'dnd': true, 'overlay': true, 'fullScreen': true, 'battery': true};
     final r = await _call<Map>('status');
     return {
       'dnd': r?['dnd'] == true,

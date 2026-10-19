@@ -1,4 +1,6 @@
 // Settings: language, permissions, password, face / fingerprint unlock, sign out.
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -204,10 +206,12 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             _permRow(tr('الإشعارات', 'Notifications'), tr('لوصول الإنذارات والتنبيهات', 'So alarms and alerts reach you'), 'notif', () => _fix(Permission.notification)),
             _permRow(tr('الموقع «طوال الوقت»', 'Location “all the time”'), tr('لإنذارات منطقتك والهاتف مقفل', 'For your area’s alarms while the phone is locked'), 'loc', _fixLocation),
+            if (Platform.isAndroid) ...[
             _permRow(tr('تجاوز «عدم الإزعاج»', 'Override Do Not Disturb'), tr('يُسمع الإنذار حتى في وضع عدم الإزعاج', 'The alarm sounds even in Do Not Disturb'), 'dnd', () async { await NativeAlarm.openDnd(); }),
             _permRow(tr('الظهور فوق التطبيقات', 'Display over other apps'), tr('يقطع الإنذار أي تطبيق مفتوح', 'The alarm interrupts any open app'), 'overlay', () async { await NativeAlarm.openOverlay(); }),
             _permRow(tr('إشعارات ملء الشاشة', 'Full-screen notifications'), tr('يظهر الإنذار فوق قفل الشاشة', 'The alarm shows over the lock screen'), 'fullScreen', () async { await NativeAlarm.openFullScreen(); }),
             _permRow(tr('دون قيود البطارية', 'No battery limits'), tr('تصل الإنذارات والتطبيق مغلق', 'Alarms arrive while the app is closed'), 'battery', () async { await NativeAlarm.openBattery(); }),
+            ],
             _permRow(tr('الميكروفون', 'Microphone'), tr('للمكالمات الصوتية مع ORT', 'For voice calls with ORT'), 'mic', () => _fix(Permission.microphone)),
             _permRow(tr('الكاميرا', 'Camera'), tr('لتصوير بلاغات 160', 'To photograph 160 reports'), 'cam', () => _fix(Permission.camera)),
             const SizedBox(height: 4),

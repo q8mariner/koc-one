@@ -23,7 +23,11 @@ class Notify {
 
   static Future<void> init() async {
     await plugin.initialize(
-      const InitializationSettings(android: AndroidInitializationSettings('@drawable/ic_stat_one')),
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@drawable/ic_stat_one'),
+        // iPhone: permission is asked from Settings / first start, not at init
+        iOS: DarwinInitializationSettings(requestAlertPermission: false, requestBadgePermission: false, requestSoundPermission: false),
+      ),
       onDidReceiveNotificationResponse: (r) => onTap?.call(r.payload),
     );
     final android = plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
@@ -51,7 +55,19 @@ class Notify {
     final android = plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     await android?.requestNotificationsPermission();
     await android?.requestFullScreenIntentPermission();
+    final ios = plugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+    await ios?.requestPermissions(alert: true, badge: true, sound: true);
   }
+
+  // iPhone: the signal tones are bundled with the app (tool/patch_ios.py); time-sensitive breaks through Focus.
+  static DarwinNotificationDetails _ios(String? sound, {bool urgent = false}) => DarwinNotificationDetails(
+        presentAlert: true,
+        presentBanner: true,
+        presentList: true,
+        presentSound: true,
+        sound: sound,
+        interruptionLevel: urgent ? InterruptionLevel.timeSensitive : InterruptionLevel.active,
+      );
 
   static int _id(String s) => s.hashCode & 0x7fffffff;
 
@@ -78,6 +94,7 @@ class Notify {
           additionalFlags: isSignal && kind != 'signal3' ? Int32List.fromList(<int>[4]) : null,
           visibility: NotificationVisibility.public,
         ),
+        iOS: _ios(isSignal ? '$kind.wav' : null, urgent: isSignal),
       ),
       payload: 'alarm:$alarmId',
     );
@@ -92,6 +109,7 @@ class Notify {
         NotificationDetails(
           android: AndroidNotificationDetails('koc_msg', _channels['koc_msg']!.$1,
               importance: Importance.high, priority: Priority.high, styleInformation: BigTextStyleInformation(body)),
+          iOS: _ios(null),
         ),
         payload: 'msg:$key',
       );
@@ -109,6 +127,7 @@ class Notify {
               ongoing: true,
               additionalFlags: Int32List.fromList(<int>[4]),
               timeoutAfter: 45000),
+          iOS: _ios(null, urgent: true),
         ),
         payload: 'call:$callId',
       );

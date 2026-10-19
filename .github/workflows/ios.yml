@@ -1,0 +1,48 @@
+name: ONE · iPhone build
+
+# Unsigned iPhone app for testing: sign and install it with Sideloadly / AltStore (free Apple ID),
+# or later with an Apple Developer account through TestFlight.
+on:
+  push:
+    branches: [main]
+    paths: ["mobile/**", "tool/patch_ios.py", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    name: iPhone app (unsigned .ipa)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.27.4"
+          channel: stable
+          cache: true
+      - name: Generate iOS project
+        working-directory: mobile
+        run: |
+          flutter create --platforms=ios --org com.koc --project-name koc_one .
+          rm -rf test
+      - name: Patch iOS (permissions, background location, tones, icon)
+        run: python3 tool/patch_ios.py mobile
+      - name: Build (no code signing)
+        working-directory: mobile
+        run: |
+          set -o pipefail
+          flutter pub get
+          flutter build ios --release --no-codesign 2>&1 | tee build.log || {
+            grep -E "error|Error" build.log | head -25 | while read -r l; do echo "::error::$l"; done; exit 1; }
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry ../KOC-ONE-iOS.ipa Payload
+          ls -l ../KOC-ONE-iOS.ipa
+          echo "### iPhone app: $(du -h ../KOC-ONE-iOS.ipa | cut -f1)" >> $GITHUB_STEP_SUMMARY
+      - name: Publish to Releases (latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          files: KOC-ONE-iOS.ipa

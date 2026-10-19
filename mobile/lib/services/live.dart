@@ -3,6 +3,7 @@
 // Location runs as an Android foreground service (persistent notification) so alarms arrive while the
 // phone is locked. Position is sent live (every ≥5 s) while inside a boundary or during an alarm, and once on leaving; never outside.
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -355,7 +356,16 @@ class LiveService extends ChangeNotifier {
     try {
       _onPosition(await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)));
     } catch (_) {}
-    final settings = AndroidSettings(
+    final LocationSettings settings = Platform.isIOS
+        ? AppleSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 5,
+            activityType: ActivityType.otherNavigation,
+            allowBackgroundLocationUpdates: true,
+            pauseLocationUpdatesAutomatically: false,
+            showBackgroundLocationIndicator: true,
+          )
+        : AndroidSettings(
       accuracy: LocationAccuracy.high,
       distanceFilter: 5,
       intervalDuration: const Duration(seconds: 5),
