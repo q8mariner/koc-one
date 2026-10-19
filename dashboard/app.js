@@ -1,4 +1,6 @@
-/* ONE · ORT dashboard (ECC-160) — Vue 3 (no build step) + Leaflet + Supabase */
+/* ONE · ORT dashboard (ECC-160) — Vue 3 (no build step) + Leaflet + Supabase
+   Areas page: Sectors → Zones → Buildings → Employees, each level as boxes with live head-counts,
+   multi-select, "alarm all / alarm selected" and "add boundary". */
 const { createApp, reactive, computed, onMounted, nextTick, watch } = Vue;
 const C = window.KOC_CONFIG;
 const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_KEY);
@@ -28,12 +30,11 @@ const STATUS = {
   trapped: [{ ar: "محتجز", en: "Trapped" }, "st-bad"], none: [{ ar: "لم يستلم", en: "Not received" }, "st-none"],
 };
 const NAV = [
-  { k: "map", t: { ar: "الخريطة الحية", en: "Live map" }, tag: { ar: "ECC-160 · كل المواقع", en: "ECC-160 · all sites" }, h: { ar: "صورة واحدة لكل المواقع", en: "One picture of every site" }, i: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zm0 0v14m6-12v14" },
-  { k: "alarms", t: { ar: "الإنذارات", en: "Alarms" }, tag: { ar: "الإنذار والحصر", en: "Alarm & muster" }, h: { ar: "إطلاق الإنذار ومتابعة الحصر", en: "Launch alarms and follow the muster" }, i: "M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0" },
-  { k: "structure", t: { ar: "القطاعات والحدود", en: "Areas & boundaries" }, tag: { ar: "الهيكل وحدود GPS", en: "Structure & GPS boundaries" }, h: { ar: "القطاعات · Zones · المباني", en: "Sectors · Zones · Buildings" }, i: "M4 20V8l8-4 8 4v12M9 20v-6h6v6M4 20h16" },
-  { k: "people", t: { ar: "الموظفون", en: "Employees" }, tag: { ar: "الحسابات", en: "Accounts" }, h: { ar: "الموظفون وجهات الاتصال", en: "Employees and contacts" }, i: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7 8v-1a3 3 0 0 0-2-3m-1-9a3 3 0 0 1 0 6" },
+  { k: "areas", t: { ar: "المناطق", en: "Areas" }, tag: { ar: "ECC-160 · كل المواقع", en: "ECC-160 · all sites" }, h: { ar: "القطاعات والموظفون", en: "Sectors and people" }, i: "M4 20V8l8-4 8 4v12M9 20v-6h6v6M4 20h16" },
+  { k: "alarms", t: { ar: "الإنذارات", en: "Alarms" }, tag: { ar: "الإنذار والحصر", en: "Alarm & muster" }, h: { ar: "الحوادث ومتابعة الحصر", en: "Incidents and muster" }, i: "M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0" },
+  { k: "people", t: { ar: "الموظفون", en: "Employees" }, tag: { ar: "الحسابات والهويات", en: "Accounts & IDs" }, h: { ar: "الموظفون وجهات الاتصال", en: "Employees and contacts" }, i: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7 8v-1a3 3 0 0 0-2-3m-1-9a3 3 0 0 1 0 6" },
   { k: "reports", t: { ar: "بلاغات 160", en: "160 reports" }, tag: { ar: "بلاغات مشفرة", en: "Encrypted reports" }, h: { ar: "بلاغات 160 مع الصور", en: "160 reports with photos" }, i: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" },
-  { k: "keys", t: { ar: "مفتاح التشفير", en: "Encryption key" }, tag: { ar: "الأمان", en: "Security" }, h: { ar: "مفتاح تشفير البلاغات", en: "Report encryption key" }, i: "M8 15a4 4 0 1 1 3-6.6L21 8v4h-2v2h-2v2h-3l-2.5-2.4A4 4 0 0 1 8 15zm-1-4h.01" },
+  { k: "keys", t: { ar: "التشفير", en: "Encryption" }, tag: { ar: "الأمان", en: "Security" }, h: { ar: "مفتاح تشفير البلاغات", en: "Report encryption key" }, i: "M8 15a4 4 0 1 1 3-6.6L21 8v4h-2v2h-2v2h-3l-2.5-2.4A4 4 0 0 1 8 15zm-1-4h.01" },
 ];
 const ITEM_TYPES = { sector: { ar: "قطاع", en: "sector" }, zone: { ar: "Zone", en: "zone" }, building: { ar: "مبنى", en: "building" } };
 const CLASSES = { unclassified: { ar: "غير مصنفة", en: "Unclassified" }, zone2: { ar: "Zone 2", en: "Zone 2" }, zone1: { ar: "Zone 1", en: "Zone 1" }, zone0: { ar: "Zone 0", en: "Zone 0" } };
@@ -43,6 +44,14 @@ const REPORT_STATUS = { new: { ar: "جديد", en: "New" }, received: { ar: "ا�
 const CALL_LABEL = { connecting: { ar: "جارٍ التجهيز…", en: "Preparing…" }, ringing: { ar: "يرن على هاتف الموظف…", en: "Ringing the employee’s phone…" },
   connected: { ar: "متصل", en: "Connected" }, ended: { ar: "انتهت المكالمة", en: "Call ended" }, missed: { ar: "لم يرد", en: "No answer" },
   rejected: { ar: "رفض المكالمة", en: "Call declined" }, failed: { ar: "تعذّر الاتصال", en: "Couldn’t connect" } };
+// level → selection key, alarm scope of a selected box, item type
+const LEVEL = {
+  sectors: { scope: "sector", type: "sector" },
+  zones: { scope: "zone", type: "zone" },
+  buildings: { scope: "building", type: "building" },
+  people: { scope: "employee", type: null },
+};
+const NO_BUILDING = "__none";
 
 let savedLang = "ar";
 try { savedLang = localStorage.getItem("one.lang") || "ar"; } catch (_) {}
@@ -51,16 +60,18 @@ createApp({
   setup() {
     const s = reactive({
       session: null, me: null, authErr: "", email: "", password: "", busy: false,
-      tab: "map", toast: "", _tick: 0, lang: savedLang,
+      tab: "areas", toast: "", _tick: 0, lang: savedLang,
       sectors: [], zones: [], buildings: [], people: [], alarms: [], acks: [], reports: [],
+      // areas drill-down + selection
+      path: { sector: null, zone: null, building: null },
+      sel: { sectors: [], zones: [], buildings: [], people: [] },
+      showMap: true,
       // structure editor
-      edit: null, // {type, id?, name, parent, color, classification, code, muster_point, entry_message, boundary, coordsText}
-      drawing: false,
-      // alarm form
-      af: { kind: "signal2", scope: "building", target_id: "", title: KINDS.signal2.title.ar, title_en: KINDS.signal2.title.en, body: KINDS.signal2.body.ar, body_en: KINDS.signal2.body.en, drill: false, second: "", confirm: false },
-      selAlarm: null,
+      edit: null, drawing: false,
+      // alarm composer (modal) and selected incident
+      comp: null, selInc: null,
       // people
-      pf: null, pe: null, avatars: {}, verifyCode: "", verifyResult: null,
+      pf: null, pe: null, avatars: {}, verifyCode: "", verifyResult: null, psel: [], pq: "",
       // reports
       privKey: null, pass: "", keyRow: null, hasKey: false, opened: {}, newPass: "", newPass2: "",
       // calls
@@ -87,6 +98,7 @@ createApp({
     const name = (type, id) => { const a = { sector: s.sectors, zone: s.zones, building: s.buildings, employee: s.people }[type]; const o = a && byId(a, id); return o ? (o.name || o.full_name) : "—"; };
     const fmt = (t) => t ? new Date(t).toLocaleString(s.lang === "en" ? "en-GB" : "ar-KW", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "—";
     const ago = (t) => { void s._tick; if (!t) return "—"; const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 1 ? tr("الآن", "now") : m < 60 ? tr(`قبل ${m} د`, `${m} min ago`) : m < 1440 ? tr(`قبل ${Math.round(m / 60)} س`, `${Math.round(m / 60)} h ago`) : fmt(t); };
+    const staff = computed(() => s.people.filter((p) => p.role !== "ort"));
 
     // ───── Auth ─────
     async function login() {
@@ -111,7 +123,7 @@ createApp({
         sb.from("zones").select("*").order("created_at"),
         sb.from("buildings").select("*").order("created_at"),
         sb.from("profiles").select("*").order("full_name"),
-        sb.from("alarms").select("*").order("created_at", { ascending: false }).limit(50),
+        sb.from("alarms").select("*").order("created_at", { ascending: false }).limit(150),
         sb.from("alarm_acks").select("*"),
         sb.from("reports").select("*").order("created_at", { ascending: false }).limit(200),
         sb.from("org_private_key").select("*").maybeSingle(),
@@ -119,7 +131,7 @@ createApp({
       s.sectors = a.data || []; s.zones = b.data || []; s.buildings = c.data || []; s.people = d.data || [];
       s.alarms = e.data || []; s.acks = f.data || []; s.reports = g.data || [];
       s.keyRow = k.data; s.hasKey = !!k.data;
-      if (!s.selAlarm) { const act = s.alarms.find((x) => x.active); if (act) s.selAlarm = act.id; }
+      if (!s.selInc) { const act = incidents.value.find((x) => x.active); if (act) s.selInc = act.key; }
       loadAvatars();
     }
 
@@ -133,6 +145,93 @@ createApp({
         .subscribe();
     }
     function beep() { try { const a = new AudioContext(), o = a.createOscillator(); o.frequency.value = 880; o.connect(a.destination); o.start(); o.stop(a.currentTime + 0.25); } catch (_) {} }
+
+    // ───── Areas drill-down ─────
+    const level = computed(() => (!s.path.sector ? "sectors" : !s.path.zone ? "zones" : !s.path.building ? "buildings" : "people"));
+    const zonesOf = (sid) => s.zones.filter((z) => z.sector_id === sid);
+    const buildingsOf = (zid) => s.buildings.filter((b) => b.zone_id === zid);
+    const countIn = (field, id) => staff.value.filter((p) => p[field] === id).length;
+    const noBuildingCount = computed(() => (s.path.zone ? staff.value.filter((p) => p.cur_zone_id === s.path.zone && !p.cur_building_id).length : 0));
+    const peopleHere = computed(() => {
+      if (level.value !== "people") return [];
+      if (s.path.building === NO_BUILDING) return staff.value.filter((p) => p.cur_zone_id === s.path.zone && !p.cur_building_id);
+      return staff.value.filter((p) => p.cur_building_id === s.path.building);
+    });
+    const levelItems = computed(() => {
+      switch (level.value) {
+        case "sectors": return s.sectors.map((x) => ({ item: x, count: countIn("cur_sector_id", x.id), field: "cur_sector_id" }));
+        case "zones": return zonesOf(s.path.sector).map((x) => ({ item: x, count: countIn("cur_zone_id", x.id), field: "cur_zone_id" }));
+        case "buildings": return buildingsOf(s.path.zone).map((x) => ({ item: x, count: countIn("cur_building_id", x.id), field: "cur_building_id" }));
+        default: return [];
+      }
+    });
+    const levelIds = computed(() => (level.value === "people" ? peopleHere.value.map((p) => p.id) : levelItems.value.map((x) => x.item.id)));
+    const levelTitle = computed(() => ({
+      sectors: tr("القطاعات", "Sectors"),
+      zones: "Zones · " + name("sector", s.path.sector),
+      buildings: tr("المباني · ", "Buildings · ") + name("zone", s.path.zone),
+      people: tr("الموظفون داخل ", "Employees in ") + (s.path.building === NO_BUILDING ? tr("الـ Zone خارج المباني", "the zone, outside buildings") : name("building", s.path.building)),
+    }[level.value]));
+    const addLabel = computed(() => ({ sectors: tr("إضافة قطاع", "Add sector"), zones: tr("إضافة Zone", "Add zone"), buildings: tr("إضافة مبنى", "Add building") }[level.value]));
+    const allLabel = computed(() => ({
+      sectors: tr("إنذار لجميع القطاعات", "Alarm all sectors"),
+      zones: tr("إنذار لكل Zones القطاع", "Alarm all zones in sector"),
+      buildings: tr("إنذار لكل مباني الـ Zone", "Alarm all buildings in zone"),
+      people: tr("إنذار لكل من في المبنى", "Alarm everyone here"),
+    }[level.value]));
+    function childInfo(x) {
+      if (level.value === "sectors") { const n = zonesOf(x.id).length; return n + " Zone"; }
+      if (level.value === "zones") { const n = buildingsOf(x.id).length; return n + tr(" مبنى", n === 1 ? " building" : " buildings"); }
+      if (level.value === "buildings") return x.muster_point ? tr("تجمع: ", "Muster: ") + x.muster_point : "";
+      return "";
+    }
+    function resetSel() { s.sel = { sectors: [], zones: [], buildings: [], people: [] }; }
+    function drill(x) {
+      if (level.value === "sectors") s.path = { sector: x.id, zone: null, building: null };
+      else if (level.value === "zones") s.path = { ...s.path, zone: x.id, building: null };
+      else if (level.value === "buildings") s.path = { ...s.path, building: x.id };
+      s.sel[level.value] = []; s.edit = null; focusPath();
+    }
+    function openNoBuilding() { s.path = { ...s.path, building: NO_BUILDING }; s.sel.people = []; focusPath(); }
+    function goLevel(lv) {
+      if (lv === "sectors") s.path = { sector: null, zone: null, building: null };
+      if (lv === "zones") s.path = { ...s.path, zone: null, building: null };
+      if (lv === "buildings") s.path = { ...s.path, building: null };
+      s.edit = null; focusPath();
+    }
+    function goTo(type, id) { // from a map click
+      if (s.drawing) return;
+      s.tab = "areas"; s.edit = null;
+      if (type === "sector") s.path = { sector: id, zone: null, building: null };
+      if (type === "zone") { const z = byId(s.zones, id); s.path = { sector: z?.sector_id || null, zone: id, building: null }; }
+      if (type === "building") { const b = byId(s.buildings, id); const z = b && byId(s.zones, b.zone_id); s.path = { sector: z?.sector_id || null, zone: b?.zone_id || null, building: id }; }
+      focusPath();
+    }
+    const isSel = (id) => s.sel[level.value].includes(id);
+    function toggleSel(id) { const a = s.sel[level.value]; const i = a.indexOf(id); if (i >= 0) a.splice(i, 1); else a.push(id); }
+    const allSelected = computed(() => levelIds.value.length > 0 && levelIds.value.every((id) => s.sel[level.value].includes(id)));
+    function toggleAll() { s.sel[level.value] = allSelected.value ? [] : [...levelIds.value]; }
+    const selCount = computed(() => s.sel[level.value].length);
+
+    // live status of people (latest answer to an active incident)
+    const activeIds = computed(() => new Set(s.alarms.filter((a) => a.active).map((a) => a.id)));
+    function personStatus(uid) {
+      if (!activeIds.value.size) return null;
+      let best = null;
+      for (const k of s.acks) if (k.user_id === uid && activeIds.value.has(k.alarm_id) && (!best || k.updated_at > best.updated_at)) best = k;
+      if (best) return best.status;
+      const p = byId(s.people, uid);
+      return p && s.alarms.some((a) => a.active && inScope(p, a)) ? "none" : null;
+    }
+    function boxStatus(field, id) {
+      if (!activeIds.value.size) return null;
+      const r = { safe: 0, help: 0, wait: 0 };
+      staff.value.filter((p) => p[field] === id).forEach((p) => {
+        const st = personStatus(p.id); if (!st) return;
+        if (st === "safe") r.safe++; else if (st === "received" || st === "none") r.wait++; else r.help++;
+      });
+      return r.safe + r.help + r.wait ? r : null;
+    }
 
     // ───── Map ─────
     function initMap() {
@@ -151,19 +250,16 @@ createApp({
     function poly(points, opts) { return points && points.length > 2 ? L.polygon(points, opts) : null; }
     function drawAreas() {
       if (!layers) return; layers.clearLayers();
-      s.sectors.forEach((x) => { const p = poly(x.boundary, { color: x.color, weight: 2, fillOpacity: 0.05, dashArray: "6 6" }); p && p.bindTooltip(tr("قطاع: ", "Sector: ") + x.name).addTo(layers); });
-      s.zones.forEach((x) => { const sec = byId(s.sectors, x.sector_id); const p = poly(x.boundary, { color: x.classification === "unclassified" ? (sec?.color || "#2B4C9B") : "#E07B29", weight: 2, fillOpacity: 0.1 }); p && p.bindTooltip(`${x.name} · ${lt(CLASSES[x.classification])}`).addTo(layers); });
-      s.buildings.forEach((x) => { const p = poly(x.boundary, { color: "#1F3A7A", weight: 2, fillColor: "#2B4C9B", fillOpacity: 0.18 }); p && p.bindTooltip(tr("مبنى: ", "Building: ") + x.name, { permanent: false }).addTo(layers); });
+      const hl = (type, id) => (type === "sector" && s.path.sector === id) || (type === "zone" && s.path.zone === id) || (type === "building" && s.path.building === id);
+      s.sectors.forEach((x) => { const p = poly(x.boundary, { color: x.color, weight: hl("sector", x.id) ? 3 : 2, fillOpacity: 0.05, dashArray: "6 6" }); p && p.bindTooltip(tr("قطاع: ", "Sector: ") + x.name).on("click", () => goTo("sector", x.id)).addTo(layers); });
+      s.zones.forEach((x) => { const sec = byId(s.sectors, x.sector_id); const p = poly(x.boundary, { color: x.classification === "unclassified" ? (sec?.color || "#2B4C9B") : "#E07B29", weight: hl("zone", x.id) ? 4 : 2, fillOpacity: 0.1 }); p && p.bindTooltip(`${x.name} · ${lt(CLASSES[x.classification])}`).on("click", () => goTo("zone", x.id)).addTo(layers); });
+      s.buildings.forEach((x) => { const p = poly(x.boundary, { color: hl("building", x.id) ? "#E5B80B" : "#1F3A7A", weight: hl("building", x.id) ? 3 : 2, fillColor: "#2B4C9B", fillOpacity: 0.18 }); p && p.bindTooltip(tr("مبنى: ", "Building: ") + x.name).on("click", () => goTo("building", x.id)).addTo(layers); });
     }
-    function statusFor(uid) {
-      const a = s.alarms.find((x) => x.active && x.id === s.selAlarm) || s.alarms.find((x) => x.active);
-      if (!a) return null; const k = s.acks.find((x) => x.alarm_id === a.id && x.user_id === uid); return k ? k.status : null;
-    }
-    const STATUS_COLOR = { safe: "#2E9E5B", received: "#E5B80B", need_help: "#E07B29", injured: "#C62828", trapped: "#C62828" };
+    const STATUS_COLOR = { safe: "#2E9E5B", received: "#E5B80B", none: "#E5B80B", need_help: "#E07B29", injured: "#C62828", trapped: "#C62828" };
     function drawPeople() {
       if (!peopleLayer) return; peopleLayer.clearLayers();
-      s.people.filter((p) => p.last_lat && p.role !== "ort").forEach((p) => {
-        const st = statusFor(p.id);
+      staff.value.filter((p) => p.last_lat).forEach((p) => {
+        const st = personStatus(p.id);
         L.circleMarker([p.last_lat, p.last_lng], { radius: 7, color: "#ffffff", weight: 2, fillColor: STATUS_COLOR[st] || (p.online ? "#2B4C9B" : "#94A3B8"), fillOpacity: 1 })
           .bindPopup(`<b>${esc(p.full_name)}</b><br>${esc(p.employee_no || "")} · ${tr("فصيلة", "Blood")} ${esc(p.blood_type || "—")}<br>${esc(name("building", p.cur_building_id))} · ${tr("آخر ظهور", "last seen")} ${ago(p.last_seen)}<br>
             ${st ? tr("الحالة: ", "Status: ") + lt(STATUS[st][0]) + "<br>" : ""}<button class="mini" onclick="window.__kocCall('${p.id}')">${tr("اتصال صوتي", "Voice call")}</button>`)
@@ -171,27 +267,55 @@ createApp({
       });
     }
     function fitAll() {
+      if (!map) return;
       const all = [...s.sectors, ...s.zones, ...s.buildings].filter((x) => x.boundary && x.boundary.length > 2).flatMap((x) => x.boundary);
       if (all.length) map.fitBounds(all, { padding: [30, 30] });
     }
-    function focus(item) { if (item.boundary && item.boundary.length > 2) map.fitBounds(item.boundary, { padding: [40, 40] }); }
+    function focus(item) { if (map && item && item.boundary && item.boundary.length > 2) map.fitBounds(item.boundary, { padding: [40, 40] }); }
+    function focusPath() {
+      nextTick(() => {
+        if (!map) return; map.invalidateSize(); drawAreas();
+        const b = s.path.building && s.path.building !== NO_BUILDING ? byId(s.buildings, s.path.building) : null;
+        const target = b || byId(s.zones, s.path.zone) || byId(s.sectors, s.path.sector);
+        if (target && target.boundary && target.boundary.length > 2) return focus(target);
+        // parent without its own boundary: fit to its children
+        const kids = level.value === "zones" ? zonesOf(s.path.sector) : level.value === "buildings" ? buildingsOf(s.path.zone) : [];
+        const pts = kids.filter((x) => x.boundary && x.boundary.length > 2).flatMap((x) => x.boundary);
+        if (pts.length) map.fitBounds(pts, { padding: [30, 30] }); else fitAll();
+      });
+    }
     const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     watch(() => [s.sectors, s.zones, s.buildings], drawAreas, { deep: true });
-    watch(() => s.selAlarm, drawPeople);
-    watch(() => s.tab, () => nextTick(() => map && map.invalidateSize()));
+    watch(() => [s.acks.length, s.alarms.length], drawPeople);
+    watch(() => [s.tab, s.showMap], () => nextTick(() => map && map.invalidateSize()));
 
     // ───── Structure editor ─────
     function newItem(type, parent = "") {
       s.edit = { type, id: null, name: "", parent, color: "#2B4C9B", classification: "unclassified", code: "", muster_point: "", entry_message: "", boundary: null, coordsText: "" };
       drawLayer && drawLayer.clearLayers();
+      revealEditor();
+    }
+    function newItemHere() {
+      const lv = level.value;
+      if (lv === "sectors") newItem("sector");
+      else if (lv === "zones") newItem("zone", s.path.sector);
+      else if (lv === "buildings") newItem("building", s.path.zone);
     }
     function editItem(type, x) {
-      s.edit = { type, id: x.id, name: x.name, parent: x.sector_id || x.zone_id || "", color: x.color || "#0e7490", classification: x.classification || "unclassified",
+      s.edit = { type, id: x.id, name: x.name, parent: x.sector_id || x.zone_id || "", color: x.color || "#2B4C9B", classification: x.classification || "unclassified",
         code: x.code || "", muster_point: x.muster_point || "", entry_message: x.entry_message || "", boundary: x.boundary, coordsText: (x.boundary || []).map((p) => p.join(", ")).join("\n") };
-      focus(x); drawEditPreview();
+      focus(x); drawEditPreview(); revealEditor();
     }
-    function startDraw() { s.drawing = true; map.pm.enableDraw("Polygon", { snappable: true, templineStyle: { color: "#E5B80B" }, pathOptions: { color: "#E5B80B" } }); }
-    function cancelDraw() { s.drawing = false; map.pm.disableDraw(); }
+    function revealEditor() { s.showMap = true; nextTick(() => { const el = document.getElementById("editor"); el && el.scrollIntoView({ behavior: "smooth", block: "start" }); }); }
+    function startDraw() {
+      s.showMap = true; s.drawing = true;
+      nextTick(() => {
+        map.invalidateSize();
+        map.pm.enableDraw("Polygon", { snappable: true, templineStyle: { color: "#E5B80B" }, pathOptions: { color: "#E5B80B" } });
+        const m = document.getElementById("map"); if (m && window.innerWidth < 900) m.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    }
+    function cancelDraw() { s.drawing = false; map && map.pm.disableDraw(); }
     function parseCoords() {
       const pts = s.edit.coordsText.split(/\n+/).map((l) => l.split(/[,\s]+/).filter(Boolean).map(Number)).filter((p) => p.length === 2 && p.every((n) => !isNaN(n)));
       if (pts.length < 3) return toast(tr("أدخل 3 نقاط على الأقل بصيغة: خط العرض, خط الطول", "Enter at least 3 points as: latitude, longitude"));
@@ -204,7 +328,8 @@ createApp({
         s.edit.coordsText = (s.edit.coordsText ? s.edit.coordsText + "\n" : "") + line; toast(tr("أُضيفت نقطة GPS · الدقة ", "GPS point added · accuracy ") + Math.round(p.coords.accuracy) + tr(" م", " m"));
       }, () => toast(tr("تعذّر قراءة GPS", "Couldn’t read GPS")), { enableHighAccuracy: true });
     }
-    function drawEditPreview() { drawLayer.clearLayers(); const p = poly(s.edit?.boundary, { color: "#E5B80B", weight: 3, fillOpacity: 0.2 }); p && p.addTo(drawLayer); }
+    function drawEditPreview() { if (!drawLayer) return; drawLayer.clearLayers(); const p = poly(s.edit?.boundary, { color: "#E5B80B", weight: 3, fillOpacity: 0.2 }); p && p.addTo(drawLayer); }
+    function closeEditor() { cancelDraw(); s.edit = null; drawLayer && drawLayer.clearLayers(); }
     async function saveItem() {
       const e = s.edit; if (!e.name.trim()) return toast(tr("اكتب الاسم أولًا", "Enter a name first"));
       const table = { sector: "sectors", zone: "zones", building: "buildings" }[e.type];
@@ -214,64 +339,117 @@ createApp({
       if (e.type === "building") { if (!e.parent) return toast(tr("اختر الـ Zone", "Choose a zone")); row.zone_id = e.parent; row.code = e.code || null; row.muster_point = e.muster_point || null; }
       const q = e.id ? sb.from(table).update(row).eq("id", e.id) : sb.from(table).insert(row);
       const { error } = await q; if (error) return toast(tr("خطأ: ", "Error: ") + error.message);
-      toast(tr("تم الحفظ", "Saved")); s.edit = null; drawLayer.clearLayers(); await loadAll();
+      toast(tr("تم الحفظ", "Saved")); closeEditor(); await loadAll(); focusPath();
     }
     async function deleteItem() {
       const e = s.edit; if (!e.id) return;
       if (!e.confirmDel) { e.confirmDel = true; return; }
       const table = { sector: "sectors", zone: "zones", building: "buildings" }[e.type];
       const { error } = await sb.from(table).delete().eq("id", e.id); if (error) return toast(error.message);
-      s.edit = null; drawLayer.clearLayers(); await loadAll(); toast(tr("تم الحذف", "Deleted"));
+      if (s.path.sector === e.id || s.path.zone === e.id || s.path.building === e.id) goLevel(e.type === "sector" ? "sectors" : e.type === "zone" ? "zones" : "buildings");
+      closeEditor(); await loadAll(); toast(tr("تم الحذف", "Deleted"));
     }
 
-    // ───── Alarms ─────
-    const targets = computed(() => ({ employee: s.people.filter((p) => p.role !== "ort").map((p) => ({ id: p.id, name: p.full_name + (p.employee_no ? " · " + p.employee_no : "") })),
-      building: s.buildings, zone: s.zones, sector: s.sectors, all: [] }[s.af.scope]));
-    function setKind(k) { s.af.kind = k; s.af.title = KINDS[k].title.ar; s.af.title_en = KINDS[k].title.en; s.af.body = KINDS[k].body.ar; s.af.body_en = KINDS[k].body.en; }
+    // ───── Alarm targeting ─────
     function inScope(p, a) {
       if (a.scope === "all") return !!(p.cur_sector_id || p.cur_zone_id || p.cur_building_id);
       if (a.scope === "employee") return p.id === a.target_id;
       return p[{ sector: "cur_sector_id", zone: "cur_zone_id", building: "cur_building_id" }[a.scope]] === a.target_id;
     }
-    const reach = computed(() => {
-      const a = s.af; if (a.scope !== "all" && !a.target_id) return 0;
-      return s.people.filter((p) => p.role !== "ort" && inScope(p, a)).length;
+    function compose(targets) {
+      if (!targets.length) return toast(tr("حدّد هدفًا واحدًا على الأقل", "Select at least one target"));
+      s.comp = { targets, kind: "signal2", title: KINDS.signal2.title.ar, title_en: KINDS.signal2.title.en, body: KINDS.signal2.body.ar, body_en: KINDS.signal2.body.en,
+        drill: false, second: "", confirm: false, busy: false, showText: false };
+    }
+    function composeAll() {
+      const lv = level.value;
+      if (lv === "sectors") return compose([{ scope: "all", id: null }]);
+      if (lv === "zones") return compose([{ scope: "sector", id: s.path.sector }]);
+      if (lv === "buildings") return compose([{ scope: "zone", id: s.path.zone }]);
+      if (s.path.building === NO_BUILDING) return compose(peopleHere.value.map((p) => ({ scope: "employee", id: p.id })));
+      return compose([{ scope: "building", id: s.path.building }]);
+    }
+    function composeSelected() { const lv = level.value; compose(s.sel[lv].map((id) => ({ scope: LEVEL[lv].scope, id }))); }
+    function composePeople(ids) { compose(ids.map((id) => ({ scope: "employee", id }))); }
+    function setKind(k) { const c = s.comp; c.kind = k; c.title = KINDS[k].title.ar; c.title_en = KINDS[k].title.en; c.body = KINDS[k].body.ar; c.body_en = KINDS[k].body.en; c.confirm = false; }
+    const targetLabel = (t) => (t.scope === "all" ? lt(SCOPES.all) : `${lt(SCOPES[t.scope])} · ${name(t.scope, t.id)}`);
+    const compReach = computed(() => {
+      const c = s.comp; if (!c) return 0;
+      return staff.value.filter((p) => c.targets.some((t) => inScope(p, { scope: t.scope, target_id: t.id }))).length;
     });
-    async function launch() {
-      const a = s.af;
-      if (a.scope !== "all" && !a.target_id) return toast(tr("اختر الهدف", "Choose a target"));
-      if (!a.title.trim() && !a.title_en.trim()) return toast(tr("اكتب عنوان الإنذار", "Enter the alarm title"));
-      if (a.kind !== "message" && (!a.second.trim() || !a.confirm)) return toast(tr("الإطلاق يحتاج تأكيدًا ثنائيًا: اسم الضابط الثاني وتأشير التأكيد", "Launch needs dual confirmation: the second officer’s name and the tick box"));
-      const { data, error } = await sb.from("alarms").insert({ kind: a.kind, title: a.title.trim() || a.title_en.trim(), body: a.body, title_en: a.title_en.trim() || null, body_en: a.body_en || null, scope: a.scope, target_id: a.scope === "all" ? null : a.target_id,
-        drill: a.drill, created_by: s.me.id, confirmed_by_name: a.second.trim() || null, active: a.kind !== "message" && a.kind !== "signal3" }).select().single();
-      if (error) return toast(tr("تعذّر الإطلاق: ", "Launch failed: ") + error.message);
-      if (a.kind === "signal3") await sb.from("alarms").update({ active: false, closed_at: new Date().toISOString() }).eq("active", true).eq("scope", a.scope).filter("target_id", a.scope === "all" ? "is" : "eq", a.scope === "all" ? null : a.target_id);
-      upsertLocal(s.alarms, data); if (data.active) s.selAlarm = data.id;
-      a.confirm = false; a.second = ""; toast(`${tr("أُطلق", "Launched")}: ${atitle(data)} → ${lt(SCOPES[data.scope])}${data.scope !== "all" ? " · " + name(data.scope, data.target_id) : ""}`);
-      await loadAll();
-    }
-    async function closeAlarm(al, allClear) {
-      if (allClear) {
-        await sb.from("alarms").insert({ kind: "signal3", title: KINDS.signal3.title.ar, body: KINDS.signal3.body.ar, title_en: KINDS.signal3.title.en, body_en: KINDS.signal3.body.en, scope: al.scope, target_id: al.target_id, drill: al.drill, created_by: s.me.id, active: false, confirmed_by_name: s.me.full_name });
+    const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)));
+    async function launchComp() {
+      const c = s.comp;
+      if (!c.title.trim() && !c.title_en.trim()) return toast(tr("اكتب عنوان الإنذار", "Enter the alarm title"));
+      if (c.kind !== "message" && (!c.second.trim() || !c.confirm)) return toast(tr("الإطلاق يحتاج تأكيدًا ثنائيًا: اسم الضابط الثاني وتأشير التأكيد", "Launch needs dual confirmation: the second officer’s name and the tick box"));
+      c.busy = true;
+      const batch = uuid();
+      const active = c.kind !== "message" && c.kind !== "signal3";
+      const rows = c.targets.map((t) => ({ kind: c.kind, title: c.title.trim() || c.title_en.trim(), body: c.body, title_en: c.title_en.trim() || null, body_en: c.body_en || null,
+        scope: t.scope, target_id: t.scope === "all" ? null : t.id, drill: c.drill, created_by: s.me.id, confirmed_by_name: c.second.trim() || null, active, batch_id: batch }));
+      const { error } = await sb.from("alarms").insert(rows);
+      if (error) { c.busy = false; return toast(tr("تعذّر الإطلاق: ", "Launch failed: ") + error.message); }
+      if (c.kind === "signal3") {
+        for (const t of c.targets) {
+          let q = sb.from("alarms").update({ active: false, closed_at: new Date().toISOString() }).eq("active", true).eq("scope", t.scope);
+          q = t.scope === "all" ? q.is("target_id", null) : q.eq("target_id", t.id);
+          await q;
+        }
       }
-      await sb.from("alarms").update({ active: false, closed_at: new Date().toISOString() }).eq("id", al.id);
-      await loadAll(); toast(allClear ? tr("أُرسلت الإشارة 3 · زوال الخطر وأُغلق الحادث", "Signal 3 · All clear sent and the incident closed") : tr("أُغلق الإنذار", "Alarm closed"));
+      toast(`${tr("أُطلق", "Launched")}: ${c.title_en && s.lang === "en" ? c.title_en : c.title} → ${c.targets.length === 1 ? targetLabel(c.targets[0]) : c.targets.length + tr(" أهداف", " targets")}`);
+      s.comp = null; resetSel(); s.psel = [];
+      await loadAll();
+      if (active) s.selInc = batch;
     }
-    function alarmRoster(al) {
-      const acks = s.acks.filter((k) => k.alarm_id === al.id);
-      const ids = new Set([...acks.map((k) => k.user_id), ...s.people.filter((p) => p.role !== "ort" && inScope(p, al)).map((p) => p.id)]);
+
+    // ───── Incidents (alarms grouped by batch) ─────
+    const incidents = computed(() => {
+      const m = new Map();
+      for (const a of s.alarms) { const k = a.batch_id || a.id; if (!m.has(k)) m.set(k, []); m.get(k).push(a); }
+      return [...m.entries()].map(([key, alarms]) => {
+        const first = alarms[0];
+        return { key, alarms, first, kind: first.kind, active: alarms.some((a) => a.active), drill: first.drill, created_at: alarms.reduce((x, a) => (a.created_at < x ? a.created_at : x), first.created_at) };
+      }).sort((a, b) => (a.active !== b.active ? (a.active ? -1 : 1) : a.created_at < b.created_at ? 1 : -1));
+    });
+    const activeIncidents = computed(() => incidents.value.filter((i) => i.active));
+    const selIncObj = computed(() => incidents.value.find((i) => i.key === s.selInc));
+    function incTargets(inc) {
+      if (inc.alarms.length === 1) return targetLabel({ scope: inc.first.scope, id: inc.first.target_id });
+      const names = inc.alarms.map((a) => (a.scope === "all" ? lt(SCOPES.all) : name(a.scope, a.target_id)));
+      return `${lt(SCOPES[inc.first.scope])} × ${inc.alarms.length}: ` + names.slice(0, 4).join("، ") + (names.length > 4 ? "…" : "");
+    }
+    function roster(inc) {
+      const ids = new Set(inc.alarms.map((a) => a.id));
+      const acks = s.acks.filter((k) => ids.has(k.alarm_id));
+      const who = new Set([...acks.map((k) => k.user_id), ...staff.value.filter((p) => inc.alarms.some((a) => inScope(p, a))).map((p) => p.id)]);
       const order = { trapped: 0, injured: 1, need_help: 2, none: 3, received: 4, safe: 5 };
-      return [...ids].map((id) => { const p = byId(s.people, id) || { id, full_name: "—" }; const k = acks.find((x) => x.user_id === id); return { p, st: k ? k.status : "none", k }; })
-        .sort((x, y) => order[x.st] - order[y.st]);
+      return [...who].map((id) => {
+        const p = byId(s.people, id) || { id, full_name: "—" };
+        const mine = acks.filter((x) => x.user_id === id).sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
+        return { p, st: mine[0] ? mine[0].status : "none", k: mine[0] };
+      }).sort((x, y) => order[x.st] - order[y.st]);
     }
-    function counts(al) {
-      const r = alarmRoster(al), c = { total: r.length, safe: 0, received: 0, need_help: 0, injured: 0, trapped: 0, none: 0 };
+    function counts(inc) {
+      const r = roster(inc), c = { total: r.length, safe: 0, received: 0, need_help: 0, injured: 0, trapped: 0, none: 0 };
       r.forEach((x) => c[x.st]++); c.pct = c.total ? Math.round((c.safe / c.total) * 100) : 0; return c;
     }
-    const selAlarmObj = computed(() => byId(s.alarms, s.selAlarm));
-    const activeAlarms = computed(() => s.alarms.filter((a) => a.active));
+    async function closeIncident(inc, allClear) {
+      if (allClear) {
+        const batch = uuid();
+        const rows = inc.alarms.map((a) => ({ kind: "signal3", title: KINDS.signal3.title.ar, body: KINDS.signal3.body.ar, title_en: KINDS.signal3.title.en, body_en: KINDS.signal3.body.en,
+          scope: a.scope, target_id: a.target_id, drill: a.drill, created_by: s.me.id, active: false, confirmed_by_name: s.me.full_name, batch_id: batch }));
+        await sb.from("alarms").insert(rows);
+      }
+      await sb.from("alarms").update({ active: false, closed_at: new Date().toISOString() }).in("id", inc.alarms.map((a) => a.id));
+      await loadAll(); toast(allClear ? tr("أُرسلت الإشارة 3 · زوال الخطر وأُغلق الحادث", "Signal 3 · All clear sent and the incident closed") : tr("أُغلق الإنذار", "Alarm closed"));
+    }
 
     // ───── People ─────
+    const peopleFiltered = computed(() => {
+      const q = s.pq.trim().toLowerCase();
+      return s.people.filter((p) => !q || [p.full_name, p.employee_no, p.phone, p.job_title, p.department].some((v) => (v || "").toLowerCase().includes(q)));
+    });
+    function togglePsel(id) { const i = s.psel.indexOf(id); if (i >= 0) s.psel.splice(i, 1); else s.psel.push(id); }
     function newPerson() { s.pf = { email: "", password: "", full_name: "", employee_no: "", phone: "", blood_type: "O+", role: "employee" }; }
     async function savePerson() {
       const f = s.pf; if (!f.email || f.password.length < 8 || !f.full_name) return toast(tr("البريد والاسم وكلمة مرور من 8 أحرف على الأقل مطلوبة", "Email, name and a password of at least 8 characters are required"));
@@ -283,17 +461,18 @@ createApp({
       const paths = s.people.filter((p) => p.photo_path).map((p) => p.photo_path);
       if (!paths.length) return;
       const { data } = await sb.storage.from("avatars").createSignedUrls(paths, 3600);
-      const map = {};
-      (data || []).forEach((d, i) => { if (d.signedUrl) map[paths[i]] = d.signedUrl; });
-      s.avatars = map;
+      const m = {};
+      (data || []).forEach((d, i) => { if (d.signedUrl) m[paths[i]] = d.signedUrl; });
+      s.avatars = m;
     }
     const avatar = (p) => (p && p.photo_path ? s.avatars[p.photo_path] : null);
     function editPerson(p) {
+      s.tab = "people";
       s.pe = { id: p.id, full_name: p.full_name || "", employee_no: p.employee_no || "", job_title: p.job_title || "", department: p.department || "",
         phone: p.phone || "", blood_type: p.blood_type || "O+", civil_id: p.civil_id || "", active: p.active !== false, role: p.role,
         photo_path: p.photo_path, file: null, preview: avatar(p) };
+      nextTick(() => { const el = document.getElementById("id-editor"); el && el.scrollIntoView({ behavior: "smooth", block: "start" }); });
     }
-    // Resize to max 640px JPEG before upload (official ID photo)
     function pickPhoto(ev) {
       const f = ev.target.files && ev.target.files[0]; if (!f) return;
       const img = new Image(), url = URL.createObjectURL(f);
@@ -325,7 +504,7 @@ createApp({
       const { data, error } = await sb.functions.invoke("id-token", { body: { verify: code } });
       s.verifyResult = error ? { valid: false } : data;
     }
-    async function updatePerson(p, field, value) { const { error } = await sb.from("profiles").update({ [field]: value }).eq("id", p.id); if (error) toast(error.message); }
+    const where = (p) => [name("sector", p.cur_sector_id), name("zone", p.cur_zone_id), name("building", p.cur_building_id)].filter((x) => x !== "—").join(" › ") || tr("خارج الحدود", "Outside all boundaries");
 
     // ───── Calls ─────
     async function callPerson(id) {
@@ -374,15 +553,12 @@ createApp({
 
     // ───── KPIs ─────
     const kpi = computed(() => ({
-      online: s.people.filter((p) => p.role !== "ort" && p.online).length,
-      inside: s.people.filter((p) => p.role !== "ort" && (p.cur_sector_id || p.cur_zone_id || p.cur_building_id)).length,
-      staff: s.people.filter((p) => p.role !== "ort").length,
+      online: staff.value.filter((p) => p.online).length,
+      inside: staff.value.filter((p) => p.cur_sector_id || p.cur_zone_id || p.cur_building_id).length,
+      staff: staff.value.length,
       newReports: s.reports.filter((r) => r.status === "new").length,
-      active: activeAlarms.value.length,
+      active: activeIncidents.value.length,
     }));
-    const zonesOf = (sid) => s.zones.filter((z) => z.sector_id === sid);
-    const buildingsOf = (zid) => s.buildings.filter((b) => b.zone_id === zid);
-    const peopleIn = (field, id) => s.people.filter((p) => p[field] === id).length;
 
     onMounted(async () => {
       const { data } = await sb.auth.getSession(); s.session = data.session;
@@ -392,10 +568,21 @@ createApp({
       setInterval(() => { s._tick = Date.now(); }, 30000);
     });
 
-    return { s, L: lt, avatar, editPerson, pickPhoto, savePersonEdit, verifyId, NAV, ITEM_TYPES, KINDS, tr, atitle, curNav, toggleLang, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, login, logout, name, fmt, ago,
-      newItem, editItem, startDraw, cancelDraw, parseCoords, useMyGps, saveItem, deleteItem, focus, fitAll,
-      targets, setKind, reach, launch, closeAlarm, alarmRoster, counts, selAlarmObj, activeAlarms,
-      newPerson, savePerson, updatePerson, callPerson, hangup, toggleMute,
-      setupKeys, unlockKey, openReport, setReportStatus, kpi, zonesOf, buildingsOf, peopleIn };
+    return {
+      s, L: lt, tr, atitle, curNav, toggleLang, NAV, ITEM_TYPES, KINDS, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, NO_BUILDING,
+      login, logout, name, fmt, ago, staff, kpi,
+      // areas
+      level, levelItems, levelTitle, addLabel, allLabel, childInfo, peopleHere, noBuildingCount, drill, openNoBuilding, goLevel,
+      isSel, toggleSel, allSelected, toggleAll, selCount, personStatus, boxStatus, zonesOf, buildingsOf,
+      // map + editor
+      fitAll, focus, newItem, newItemHere, editItem, startDraw, cancelDraw, parseCoords, useMyGps, saveItem, deleteItem, closeEditor,
+      // alarms
+      compose, composeAll, composeSelected, composePeople, setKind, targetLabel, compReach, launchComp,
+      incidents, activeIncidents, selIncObj, incTargets, roster, counts, closeIncident,
+      // people
+      peopleFiltered, togglePsel, newPerson, savePerson, avatar, editPerson, pickPhoto, savePersonEdit, verifyId, where,
+      callPerson, hangup, toggleMute,
+      setupKeys, unlockKey, openReport, setReportStatus,
+    };
   },
 }).mount("#app");

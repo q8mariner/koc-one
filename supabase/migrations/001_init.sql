@@ -339,3 +339,7 @@ language sql stable security definer set search_path = public as $$
   where d.token = p_token and c.status = 'ringing' and c.created_at > now() - interval '70 seconds'
   order by c.created_at desc limit 1;
 $$;
+
+-- One incident can target several sectors / zones / buildings / employees: one alarm row per target, same batch_id.
+alter table public.alarms add column if not exists batch_id uuid;
+create index if not exists alarms_batch_idx on public.alarms(batch_id);

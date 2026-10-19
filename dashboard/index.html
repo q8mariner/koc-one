@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#2B4C9B">
+<meta name="theme-color" content="#1F3A7A">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -43,272 +43,353 @@
   </main>
 
   <!-- ───── Console ───── -->
-  <div v-else-if="s.me" class="shell">
-    <nav class="rail" role="tablist" :aria-label="tr('الأقسام', 'Sections')">
+  <div v-else-if="s.me" class="shell" :class="'tab-' + s.tab">
+    <!-- desktop side rail -->
+    <nav class="rail" :aria-label="tr('الأقسام', 'Sections')">
       <div class="rail-mark"><img src="favicon-192.png" alt="" width="44" height="44"><span><b>/</b>ONE</span></div>
-      <button v-for="n in NAV" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k" role="tab" :title="L(n.t)">
+      <button v-for="n in NAV" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k" :title="L(n.t)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="n.i"/></svg><span>{{ L(n.t) }}</span>
         <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && kpi.active" class="red">{{ kpi.active }}</em>
       </button>
-      <button class="out" @click="toggleLang" :title="tr('English', 'العربية')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm-9 9h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span>{{ s.lang==='ar' ? 'English' : 'العربية' }}</span></button>
-      <button @click="logout" :title="tr('خروج', 'Sign out')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg><span>{{ tr('خروج', 'Sign out') }}</span></button>
+      <button class="out" @click="toggleLang"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm-9 9h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span>{{ s.lang==='ar' ? 'English' : 'العربية' }}</span></button>
+      <button @click="logout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg><span>{{ tr('خروج', 'Sign out') }}</span></button>
     </nav>
 
     <div class="main">
       <header class="top">
+        <img class="mob-logo" src="favicon-192.png" alt="" width="36" height="36">
         <div class="titles">
           <span class="tag">{{ L(curNav.tag) }}</span>
           <h1>{{ L(curNav.h) }}</h1>
         </div>
-        <div class="who"><span class="live"><i></i>{{ tr('مباشر', 'Live') }}</span><span>{{ s.me.full_name }}</span></div>
+        <div class="who">
+          <span class="live"><i></i>{{ tr('مباشر', 'Live') }}</span>
+          <span class="me-name">{{ s.me.full_name }}</span>
+          <button class="icon-btn mob" @click="toggleLang" :aria-label="tr('English', 'العربية')">{{ s.lang==='ar' ? 'EN' : 'ع' }}</button>
+          <button class="icon-btn mob" @click="logout" :aria-label="tr('خروج', 'Sign out')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg></button>
+        </div>
       </header>
+
       <div class="kpis">
-        <div class="kpi c-red" :class="{hot: kpi.active}"><b>{{ kpi.active }}</b><span>{{ tr('إنذار نشط', 'Active alarms') }}</span></div>
+        <button class="kpi c-red" :class="{hot: kpi.active}" @click="s.tab='alarms'"><b>{{ kpi.active }}</b><span>{{ tr('إنذار نشط', 'Active alarms') }}</span></button>
         <div class="kpi c-navy"><b>{{ kpi.inside }}<i>/{{ kpi.staff }}</i></b><span>{{ tr('داخل الحدود', 'Inside boundaries') }}</span></div>
         <div class="kpi c-green"><b>{{ kpi.online }}</b><span>{{ tr('متصل الآن', 'Online now') }}</span></div>
-        <div class="kpi c-orange"><b>{{ kpi.newReports }}</b><span>{{ tr('بلاغ جديد', 'New reports') }}</span></div>
-        <div class="kpi c-sky"><b>{{ s.sectors.length }}<i> · {{ s.zones.length }} · {{ s.buildings.length }}</i></b><span>{{ tr('قطاع · Zone · مبنى', 'Sectors · Zones · Buildings') }}</span></div>
+        <button class="kpi c-orange" @click="s.tab='reports'"><b>{{ kpi.newReports }}</b><span>{{ tr('بلاغ جديد', 'New reports') }}</span></button>
       </div>
 
-    <div class="work" :class="{wide: ['people','reports','keys'].includes(s.tab)}">
-      <section class="panel">
+      <!-- ═════ AREAS: sectors → zones → buildings → employees ═════ -->
+      <section class="page areas" v-show="s.tab==='areas'">
+        <div class="area-col">
+          <nav class="crumbs" :aria-label="tr('المسار', 'Path')">
+            <button :class="{on: level==='sectors'}" @click="goLevel('sectors')">{{ tr('جميع القطاعات', 'All sectors') }}</button>
+            <template v-if="s.path.sector"><i>›</i><button :class="{on: level==='zones'}" @click="goLevel('zones')">{{ name('sector', s.path.sector) }}</button></template>
+            <template v-if="s.path.zone"><i>›</i><button :class="{on: level==='buildings'}" @click="goLevel('buildings')">{{ name('zone', s.path.zone) }}</button></template>
+            <template v-if="s.path.building"><i>›</i><button class="on">{{ s.path.building===NO_BUILDING ? tr('خارج المباني', 'Outside buildings') : name('building', s.path.building) }}</button></template>
+          </nav>
 
-        <!-- LIVE MAP -->
-        <template v-if="s.tab==='map'">
-          <h2 class="sec">{{ tr('الوضع الآن', 'Current situation') }}</h2>
-          <div v-if="!activeAlarms.length" class="calm">{{ tr('لا يوجد إنذار نشط. الخريطة تعرض آخر موقع معروف عند عبور الحدود فقط — لا تتبّع مستمر.', 'No active alarm. The map shows the last known position at boundary crossings only — no continuous tracking.') }}</div>
-          <div v-for="a in activeAlarms" :key="a.id" class="alarm-card" :class="KINDS[a.kind].cls" @click="s.selAlarm=a.id; s.tab='alarms'">
-            <div class="row"><strong>{{ atitle(a) }}</strong><span class="chip" v-if="a.drill">{{ tr('تمرين', 'Drill') }}</span></div>
-            <div class="muted">{{ L(SCOPES[a.scope]) }}<template v-if="a.scope!=='all'"> · {{ name(a.scope, a.target_id) }}</template> · {{ ago(a.created_at) }}</div>
-            <div class="bar"><span :style="{width: counts(a).pct+'%'}"></span></div>
-            <div class="mini-stats"><span>{{ tr('آمن', 'Safe') }} {{ counts(a).safe }}/{{ counts(a).total }}</span><span>{{ tr('مصاب/محتجز', 'Injured/trapped') }} {{ counts(a).injured + counts(a).trapped }}</span><span>{{ tr('بدون رد', 'No response') }} {{ counts(a).received + counts(a).none }}</span></div>
-          </div>
-          <h3>{{ tr('القطاعات', 'Sectors') }}</h3>
-          <ul class="tree">
-            <li v-for="sec in s.sectors" :key="sec.id">
-              <button class="node" @click="focus(sec)"><i class="dot" :style="{background: sec.color}"></i>{{ sec.name }}<span class="count">{{ peopleIn('cur_sector_id', sec.id) }}</span></button>
-              <ul><li v-for="z in zonesOf(sec.id)" :key="z.id"><button class="node" @click="focus(z)">{{ z.name }} <span class="cls" :class="z.classification">{{ L(CLASSES[z.classification]) }}</span><span class="count">{{ peopleIn('cur_zone_id', z.id) }}</span></button>
-                <ul><li v-for="b in buildingsOf(z.id)" :key="b.id"><button class="node" @click="focus(b)">{{ b.name }}<span class="count">{{ peopleIn('cur_building_id', b.id) }}</span></button></li></ul></li></ul>
-            </li>
-          </ul>
-          <div class="legend"><span><i style="background:#2E9E5B"></i>{{ tr('آمن', 'Safe') }}</span><span><i style="background:#E5B80B"></i>{{ tr('استلم ولم يرد', 'Received, no reply') }}</span><span><i style="background:#C62828"></i>{{ tr('مصاب/محتجز', 'Injured/trapped') }}</span><span><i style="background:#2B4C9B"></i>{{ tr('متصل', 'Online') }}</span><span><i style="background:#94A3B8"></i>{{ tr('غير متصل', 'Offline') }}</span></div>
-        </template>
-
-        <!-- ALARMS -->
-        <template v-if="s.tab==='alarms'">
-          <h2 class="sec">{{ tr('إطلاق إنذار', 'Launch an alarm') }}</h2>
-          <div class="kinds">
-            <button v-for="(k,key) in KINDS" :key="key" class="kind" :class="[k.cls, {on: s.af.kind===key}]" @click="setKind(key)">{{ L(k.label) }}</button>
-          </div>
-          <label for="scope">{{ tr('نطاق الإنذار', 'Scope') }}</label>
-          <div class="seg" id="scope">
-            <button v-for="(v,k) in SCOPES" :key="k" :class="{on: s.af.scope===k}" @click="s.af.scope=k; s.af.target_id=''">{{ L(v) }}</button>
-          </div>
-          <template v-if="s.af.scope!=='all'">
-            <label for="tgt">{{ tr('الهدف', 'Target') }}</label>
-            <select id="tgt" v-model="s.af.target_id"><option value="" disabled>{{ tr('اختر…', 'Choose…') }}</option><option v-for="t in targets" :key="t.id" :value="t.id">{{ t.name }}</option></select>
-          </template>
-          <p class="reach">{{ tr('يصل إلى', 'Reaches') }} <b>{{ reach }}</b> {{ s.af.scope==='employee' ? tr('موظف', 'employee') : tr('موظفًا داخل الحدود الآن', 'employees inside the boundary now') }}<span v-if="s.af.scope!=='employee'" class="muted"> — {{ tr('ويصل أيضًا لكل من يدخل الحدود ما دام الإنذار نشطًا', 'and anyone who enters while the alarm is active') }}</span></p>
-          <div class="two">
-            <div><label for="ttl">{{ tr('العنوان (عربي)', 'Title (Arabic)') }}</label><input id="ttl" v-model="s.af.title" dir="rtl"></div>
-            <div><label for="ttle">{{ tr('العنوان (إنجليزي)', 'Title (English)') }}</label><input id="ttle" v-model="s.af.title_en" dir="ltr"></div>
-          </div>
-          <div class="two">
-            <div><label for="bdy">{{ tr('التعليمات (عربي)', 'Instructions (Arabic)') }}</label><textarea id="bdy" v-model="s.af.body" rows="5" dir="rtl"></textarea></div>
-            <div><label for="bdye">{{ tr('التعليمات (إنجليزي)', 'Instructions (English)') }}</label><textarea id="bdye" v-model="s.af.body_en" rows="5" dir="ltr"></textarea></div>
-          </div>
-          <label class="check"><input type="checkbox" v-model="s.af.drill"> {{ tr('وضع التمرين (Drill) — لا يُحتسب حادثًا فعليًا', 'Drill mode — not counted as a real incident') }}</label>
-          <fieldset v-if="s.af.kind!=='message'" class="dual">
-            <legend>{{ tr('تأكيد ثنائي', 'Dual confirmation') }}</legend>
-            <label for="sec2">{{ tr('اسم الضابط الثاني المؤكِّد', 'Second confirming officer') }}</label><input id="sec2" v-model="s.af.second" :placeholder="tr('مثال: مشرف الوردية', 'e.g. shift supervisor')">
-            <label class="check"><input type="checkbox" v-model="s.af.confirm"> {{ tr('أؤكد إطلاق', 'I confirm launching') }} {{ L(KINDS[s.af.kind].short) }} {{ tr('على النطاق المحدد', 'on the selected scope') }}</label>
-          </fieldset>
-          <button class="btn launch" :class="KINDS[s.af.kind].cls" @click="launch">{{ tr('إطلاق', 'Launch') }} {{ L(KINDS[s.af.kind].short) }}</button>
-
-          <h2 class="sec gap">{{ tr('سجل الإنذارات', 'Alarm log') }}</h2>
-          <div class="list">
-            <button v-for="a in s.alarms" :key="a.id" class="alarm-row" :class="[KINDS[a.kind].cls, {on: s.selAlarm===a.id, off: !a.active}]" @click="s.selAlarm=a.id">
-              <span class="tag">{{ L(KINDS[a.kind].short) }}</span><span class="grow">{{ L(SCOPES[a.scope]) }}<template v-if="a.scope!=='all'"> · {{ name(a.scope, a.target_id) }}</template></span>
-              <span class="muted">{{ a.active ? tr('نشط', 'Active') : tr('مغلق', 'Closed') }} · {{ fmt(a.created_at) }}</span>
-            </button>
+          <div class="level-head">
+            <h2 class="sec">{{ levelTitle }}</h2>
+            <button v-if="level!=='people'" class="btn sm primary" @click="newItemHere">+ {{ addLabel }}</button>
           </div>
 
-          <div v-if="selAlarmObj" class="roster">
-            <div class="row"><h3>{{ atitle(selAlarmObj) }} <span class="chip" v-if="selAlarmObj.drill">{{ tr('تمرين', 'Drill') }}</span></h3>
-              <div v-if="selAlarmObj.active" class="row gap8"><button class="btn sm k3" @click="closeAlarm(selAlarmObj, true)">{{ L(KINDS.signal3.label) }}</button><button class="btn sm ghost" @click="closeAlarm(selAlarmObj,false)">{{ tr('إغلاق فقط', 'Close only') }}</button></div></div>
-            <p class="muted">{{ tr('أطلقه', 'Launched by') }} {{ name('employee', selAlarmObj.created_by) }}<template v-if="selAlarmObj.confirmed_by_name"> · {{ tr('أكّده', 'confirmed by') }} {{ selAlarmObj.confirmed_by_name }}</template> · {{ fmt(selAlarmObj.created_at) }}</p>
-            <div class="stat-grid">
-              <div><b>{{ counts(selAlarmObj).pct }}%</b><span>{{ tr('نسبة الحصر', 'Muster rate') }}</span></div>
-              <div class="ok"><b>{{ counts(selAlarmObj).safe }}</b><span>{{ tr('آمن', 'Safe') }}</span></div>
-              <div class="bad"><b>{{ counts(selAlarmObj).trapped }}</b><span>{{ tr('محتجز', 'Trapped') }}</span></div>
-              <div class="bad"><b>{{ counts(selAlarmObj).injured }}</b><span>{{ tr('مصاب', 'Injured') }}</span></div>
-              <div class="warn"><b>{{ counts(selAlarmObj).need_help }}</b><span>{{ tr('يحتاج مساعدة', 'Needs help') }}</span></div>
-              <div><b>{{ counts(selAlarmObj).received + counts(selAlarmObj).none }}</b><span>{{ tr('بدون رد', 'No response') }}</span></div>
-            </div>
-            <table class="tbl">
-              <thead><tr><th>{{ tr('الموظف', 'Employee') }}</th><th>{{ tr('الحالة', 'Status') }}</th><th>{{ tr('الموقع', 'Location') }}</th><th>{{ tr('الدم', 'Blood') }}</th><th></th></tr></thead>
-              <tbody><tr v-for="r in alarmRoster(selAlarmObj)" :key="r.p.id">
-                <td>{{ r.p.full_name }}<small class="muted d">{{ r.p.employee_no }}</small></td>
-                <td><span class="st" :class="STATUS[r.st][1]">{{ L(STATUS[r.st][0]) }}</span></td>
-                <td class="muted">{{ name('building', r.p.cur_building_id) !== '—' ? name('building', r.p.cur_building_id) : name('zone', r.p.cur_zone_id) }}<small class="d">{{ r.k ? ago(r.k.updated_at) : '' }}</small></td>
-                <td class="mono">{{ r.p.blood_type || '—' }}</td>
-                <td class="nowrap"><button class="btn sm" @click="callPerson(r.p.id)">{{ tr('اتصال', 'Call') }}</button><small class="d mono" dir="ltr">{{ r.p.phone }}</small></td>
-              </tr><tr v-if="!alarmRoster(selAlarmObj).length"><td colspan="5" class="muted">{{ tr('لا أحد داخل نطاق هذا الإنذار حاليًا.', 'Nobody is inside this alarm’s scope right now.') }}</td></tr></tbody>
-            </table>
-          </div>
-        </template>
-
-        <!-- STRUCTURE -->
-        <template v-if="s.tab==='structure'">
-          <div class="row"><h2 class="sec">{{ tr('القطاعات · Zones · المباني', 'Sectors · Zones · Buildings') }}</h2><button class="btn sm primary" @click="newItem('sector')">+ {{ tr('قطاع', 'Sector') }}</button></div>
-          <div v-if="s.edit" class="editor">
-            <h3>{{ s.edit.id ? tr('تعديل', 'Edit') : tr('إضافة', 'Add') }} {{ L(ITEM_TYPES[s.edit.type]) }}</h3>
-            <label for="nm">{{ tr('الاسم', 'Name') }}</label><input id="nm" v-model="s.edit.name">
+          <!-- boundary editor -->
+          <div v-if="s.edit" id="editor" class="editor">
+            <div class="row"><h3>{{ s.edit.id ? tr('تعديل', 'Edit') : tr('إضافة', 'Add') }} {{ L(ITEM_TYPES[s.edit.type]) }}</h3><button class="icon-btn" @click="closeEditor" :aria-label="tr('إغلاق', 'Close')">✕</button></div>
+            <label for="nm">{{ s.edit.type==='zone' ? tr('اسم / رقم الـ Zone', 'Zone name / number') : tr('الاسم', 'Name') }}</label><input id="nm" v-model="s.edit.name">
             <template v-if="s.edit.type==='sector'"><label for="clr">{{ tr('اللون على الخريطة', 'Map colour') }}</label><input id="clr" type="color" v-model="s.edit.color"></template>
             <template v-if="s.edit.type==='zone'">
-              <label for="ps">{{ tr('القطاع', 'Sector') }}</label><select id="ps" v-model="s.edit.parent"><option v-for="x in s.sectors" :key="x.id" :value="x.id">{{ x.name }}</option></select>
-              <label for="cl">{{ tr('تصنيف المنطقة الخطرة', 'Hazardous-area classification') }}</label><select id="cl" v-model="s.edit.classification"><option v-for="(v,k) in CLASSES" :key="k" :value="k">{{ L(v) }}</option></select>
+              <div class="two">
+                <div><label for="ps">{{ tr('القطاع', 'Sector') }}</label><select id="ps" v-model="s.edit.parent"><option v-for="x in s.sectors" :key="x.id" :value="x.id">{{ x.name }}</option></select></div>
+                <div><label for="cl">{{ tr('التصنيف', 'Classification') }}</label><select id="cl" v-model="s.edit.classification"><option v-for="(v,k) in CLASSES" :key="k" :value="k">{{ L(v) }}</option></select></div>
+              </div>
             </template>
             <template v-if="s.edit.type==='building'">
               <label for="pz">Zone</label><select id="pz" v-model="s.edit.parent"><option v-for="x in s.zones" :key="x.id" :value="x.id">{{ x.name }} — {{ name('sector', x.sector_id) }}</option></select>
               <div class="two"><div><label for="cd">{{ tr('الرمز', 'Code') }}</label><input id="cd" v-model="s.edit.code"></div><div><label for="mp">{{ tr('نقطة التجمع', 'Muster point') }}</label><input id="mp" v-model="s.edit.muster_point" placeholder="MP-3"></div></div>
             </template>
             <label for="msg">{{ tr('رسالة عند دخول الحدود', 'Message on entering the boundary') }}</label><textarea id="msg" v-model="s.edit.entry_message" rows="2" :placeholder="tr('تظهر على هاتف الموظف عند عبوره حدود المنطقة', 'Shown on the employee’s phone when they cross into the area')"></textarea>
-            <label>{{ tr('حدود GPS', 'GPS boundary') }}</label>
+            <label>{{ tr('حدود GPS', 'GPS boundary') }} <span class="muted">· {{ s.edit.boundary ? s.edit.boundary.length + tr(' نقاط', ' points') : tr('لم تُحدد بعد', 'not set yet') }}</span></label>
             <div class="row gap8 wrap">
-              <button v-if="!s.drawing" class="btn sm" @click="startDraw">{{ tr('ارسم المضلع على الخريطة', 'Draw the polygon on the map') }}</button>
+              <button v-if="!s.drawing" class="btn sm" @click="startDraw">✎ {{ tr('ارسم على الخريطة', 'Draw on the map') }}</button>
               <button v-else class="btn sm warn" @click="cancelDraw">{{ tr('إلغاء الرسم', 'Cancel drawing') }}</button>
-              <button class="btn sm ghost" @click="useMyGps">{{ tr('أضف موقعي الحالي (GPS)', 'Add my current position (GPS)') }}</button>
+              <button class="btn sm ghost" @click="useMyGps">⌖ {{ tr('أضف موقعي (GPS)', 'Add my position (GPS)') }}</button>
             </div>
-            <textarea v-model="s.edit.coordsText" rows="4" dir="ltr" class="mono" placeholder="29.0760, 48.0760&#10;29.0760, 48.0790&#10;29.0740, 48.0790"></textarea>
-            <div class="row gap8"><button class="btn sm ghost" @click="parseCoords">{{ tr('تطبيق الإحداثيات', 'Apply coordinates') }}</button><span class="muted">{{ s.edit.boundary ? s.edit.boundary.length + tr(' نقاط', ' points') : tr('بدون حدود', 'No boundary') }}</span></div>
+            <textarea v-model="s.edit.coordsText" rows="3" dir="ltr" class="mono" placeholder="29.0760, 48.0760&#10;29.0760, 48.0790&#10;29.0740, 48.0790"></textarea>
+            <button class="btn sm ghost self-start" @click="parseCoords">{{ tr('تطبيق الإحداثيات', 'Apply coordinates') }}</button>
             <div class="row gap8 end">
               <button v-if="s.edit.id" class="btn sm danger" @click="deleteItem">{{ s.edit.confirmDel ? tr('اضغط مجددًا لتأكيد الحذف', 'Click again to confirm') : tr('حذف', 'Delete') }}</button>
-              <button class="btn sm ghost" @click="s.edit=null; cancelDraw()">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary" @click="saveItem">{{ tr('حفظ', 'Save') }}</button>
+              <button class="btn sm ghost" @click="closeEditor">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary" @click="saveItem">{{ tr('حفظ', 'Save') }}</button>
             </div>
           </div>
-          <ul class="tree edit">
-            <li v-for="sec in s.sectors" :key="sec.id">
-              <div class="node"><i class="dot" :style="{background: sec.color}"></i><button class="link" @click="editItem('sector', sec)">{{ sec.name }}</button><span class="grow"></span><button class="btn xs ghost" @click="newItem('zone', sec.id)">+ Zone</button></div>
-              <ul><li v-for="z in zonesOf(sec.id)" :key="z.id">
-                <div class="node"><button class="link" @click="editItem('zone', z)">{{ z.name }}</button><span class="cls" :class="z.classification">{{ L(CLASSES[z.classification]) }}</span><span class="grow"></span><button class="btn xs ghost" @click="newItem('building', z.id)">+ {{ tr('مبنى', 'Building') }}</button></div>
-                <ul><li v-for="b in buildingsOf(z.id)" :key="b.id"><div class="node"><button class="link" @click="editItem('building', b)">{{ b.name }}</button><span class="muted">{{ b.muster_point }}</span><span v-if="!b.boundary" class="chip">{{ tr('بلا حدود', 'No boundary') }}</span></div></li></ul>
-              </li></ul>
-            </li>
-          </ul>
-        </template>
 
-        <!-- PEOPLE -->
-        <template v-if="s.tab==='people'">
-          <div class="row"><h2 class="sec">{{ tr('الموظفون', 'Employees') }}</h2><button class="btn sm primary" @click="newPerson">+ {{ tr('حساب موظف', 'Employee account') }}</button></div>
-          <form v-if="s.pf" class="editor grid3" @submit.prevent="savePerson">
-            <div><label for="pfn">{{ tr('الاسم الكامل', 'Full name') }}</label><input id="pfn" v-model="s.pf.full_name"></div>
-            <div><label for="pfe">{{ tr('الرقم الوظيفي', 'Employee no.') }}</label><input id="pfe" v-model="s.pf.employee_no"></div>
-            <div><label for="pfp">{{ tr('الهاتف', 'Phone') }}</label><input id="pfp" v-model="s.pf.phone" dir="ltr" placeholder="+965…"></div>
-            <div><label for="pfm">{{ tr('البريد (اسم الدخول)', 'Email (sign-in)') }}</label><input id="pfm" v-model="s.pf.email" type="email" dir="ltr"></div>
-            <div><label for="pfw">{{ tr('كلمة مرور مؤقتة', 'Temporary password') }}</label><input id="pfw" v-model="s.pf.password" dir="ltr"></div>
-            <div><label for="pfb">{{ tr('فصيلة الدم', 'Blood type') }}</label><select id="pfb" v-model="s.pf.blood_type"><option v-for="b in ['O+','O-','A+','A-','B+','B-','AB+','AB-']" :key="b">{{ b }}</option></select></div>
-            <div><label for="pfr">{{ tr('الدور', 'Role') }}</label><select id="pfr" v-model="s.pf.role"><option value="employee">{{ tr('موظف', 'Employee') }}</option><option value="ort">{{ tr('عضو ORT', 'ORT member') }}</option></select></div>
-            <div class="row gap8 end span2"><button type="button" class="btn sm ghost" @click="s.pf=null">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary">{{ tr('إنشاء الحساب', 'Create account') }}</button></div>
-          </form>
-          <!-- ID editor (photo is uploaded here only) -->
-          <div v-if="s.pe" class="editor id-editor">
-            <h3>{{ tr('بيانات الهوية الرقمية', 'Digital ID details') }}</h3>
-            <div class="id-edit">
-              <div class="photo-box">
-                <div class="photo" :style="s.pe.preview ? {backgroundImage: 'url(' + s.pe.preview + ')'} : {}"><svg v-if="!s.pe.preview" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0"/></svg></div>
-                <label class="btn sm upload">{{ tr('رفع الصورة الرسمية', 'Upload official photo') }}<input type="file" accept="image/*" @change="pickPhoto" hidden></label>
-                <small class="muted">{{ tr('تظهر في هوية الموظف فقط · لا يستطيع الموظف تغييرها', 'Shown on the employee’s ID only · the employee can’t change it') }}</small>
+          <!-- select-all row -->
+          <div class="selrow" v-if="level==='people' ? peopleHere.length : levelItems.length">
+            <label class="check"><input type="checkbox" :checked="allSelected" @change="toggleAll"> {{ tr('تحديد الكل', 'Select all') }}</label>
+            <span class="muted">{{ selCount }} {{ tr('محدد', 'selected') }}</span>
+          </div>
+
+          <!-- boxes -->
+          <div v-if="level!=='people'" class="boxes">
+            <div v-for="x in levelItems" :key="x.item.id" class="box" :class="{on: isSel(x.item.id)}" role="button" tabindex="0" @click="drill(x.item)" @keydown.enter="drill(x.item)">
+              <label class="chk" @click.stop :aria-label="tr('تحديد', 'Select')"><input type="checkbox" :checked="isSel(x.item.id)" @change="toggleSel(x.item.id)"></label>
+              <button class="box-edit" @click.stop="editItem(level==='sectors'?'sector':level==='zones'?'zone':'building', x.item)" :aria-label="tr('تعديل', 'Edit')">✎</button>
+              <i class="swatch" v-if="level==='sectors'" :style="{background: x.item.color}"></i>
+              <div class="box-name">{{ x.item.name }}</div>
+              <div class="box-meta">
+                <span v-if="level==='zones'" class="cls" :class="x.item.classification">{{ L(CLASSES[x.item.classification]) }}</span>
+                <span class="muted">{{ childInfo(x.item) }}</span>
+                <span v-if="!x.item.boundary" class="chip warn">{{ tr('بلا حدود', 'No boundary') }}</span>
               </div>
-              <div class="grid3 grow">
-                <div><label for="pen">{{ tr('الاسم الكامل', 'Full name') }}</label><input id="pen" v-model="s.pe.full_name"></div>
-                <div><label for="peno">{{ tr('الرقم الوظيفي', 'Employee no.') }}</label><input id="peno" v-model="s.pe.employee_no"></div>
-                <div><label for="pej">{{ tr('المسمى الوظيفي', 'Job title') }}</label><input id="pej" v-model="s.pe.job_title"></div>
-                <div><label for="ped">{{ tr('المجموعة / الإدارة', 'Group / department') }}</label><input id="ped" v-model="s.pe.department"></div>
-                <div><label for="pep">{{ tr('الهاتف', 'Phone') }}</label><input id="pep" v-model="s.pe.phone" dir="ltr"></div>
-                <div><label for="peb">{{ tr('فصيلة الدم', 'Blood type') }}</label><select id="peb" v-model="s.pe.blood_type"><option v-for="b in ['O+','O-','A+','A-','B+','B-','AB+','AB-']" :key="b">{{ b }}</option></select></div>
-                <div><label for="pec">{{ tr('الرقم المدني', 'Civil ID') }}</label><input id="pec" v-model="s.pe.civil_id" dir="ltr"></div>
-                <div><label for="per">{{ tr('الدور', 'Role') }}</label><select id="per" v-model="s.pe.role"><option value="employee">{{ tr('موظف', 'Employee') }}</option><option value="ort">{{ tr('عضو ORT', 'ORT member') }}</option></select></div>
-                <div><label class="check"><input type="checkbox" v-model="s.pe.active"> {{ tr('موظف فعّال', 'Active employee') }}</label></div>
+              <div class="box-count"><b>{{ x.count }}</b><span>{{ tr('موظف داخله', x.count===1 ? 'person inside' : 'people inside') }}</span></div>
+              <div v-if="boxStatus(x.field, x.item.id)" class="box-st">
+                <span class="ok">✓ {{ boxStatus(x.field, x.item.id).safe }}</span>
+                <span class="bad" v-if="boxStatus(x.field, x.item.id).help">! {{ boxStatus(x.field, x.item.id).help }}</span>
+                <span class="wait" v-if="boxStatus(x.field, x.item.id).wait">… {{ boxStatus(x.field, x.item.id).wait }}</span>
               </div>
             </div>
-            <div class="row gap8 end"><button class="btn sm ghost" @click="s.pe=null">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary" @click="savePersonEdit">{{ tr('حفظ الهوية', 'Save ID') }}</button></div>
+            <div v-if="level==='buildings' && noBuildingCount" class="box ghostbox" role="button" tabindex="0" @click="openNoBuilding" @keydown.enter="openNoBuilding">
+              <div class="box-name">{{ tr('خارج المباني', 'Outside buildings') }}</div>
+              <div class="box-meta"><span class="muted">{{ tr('داخل الـ Zone وليس في مبنى', 'In the zone, not in a building') }}</span></div>
+              <div class="box-count"><b>{{ noBuildingCount }}</b><span>{{ tr('موظف', 'people') }}</span></div>
+            </div>
+            <button class="box addbox" @click="newItemHere"><span>+</span>{{ addLabel }}</button>
           </div>
 
-          <div class="scroll"><table class="tbl">
-            <thead><tr><th>{{ tr('الاسم', 'Name') }}</th><th>{{ tr('الرقم', 'No.') }}</th><th>{{ tr('المسمى', 'Title') }}</th><th>{{ tr('الموقع الحالي', 'Current location') }}</th><th>{{ tr('آخر ظهور', 'Last seen') }}</th><th>{{ tr('الدم', 'Blood') }}</th><th>{{ tr('الهاتف', 'Phone') }}</th><th></th></tr></thead>
-            <tbody><tr v-for="p in s.people" :key="p.id">
-              <td><div class="who-cell"><span class="ava" :style="avatar(p) ? {backgroundImage: 'url(' + avatar(p) + ')'} : {}"><i class="dot" :class="p.online ? 'on' : ''"></i></span><span>{{ p.full_name }}<small class="muted d">{{ p.role==='ort' ? 'ORT' : (p.department || tr('موظف', 'Employee')) }}<template v-if="p.active===false"> · {{ tr('موقوف', 'inactive') }}</template></small></span></div></td>
-              <td class="mono">{{ p.employee_no }}</td>
-              <td>{{ p.job_title || '—' }}</td>
-              <td class="muted">{{ [name('sector', p.cur_sector_id), name('zone', p.cur_zone_id), name('building', p.cur_building_id)].filter(x=>x!=='—').join(' › ') || tr('خارج الحدود', 'Outside all boundaries') }}</td>
-              <td class="muted">{{ ago(p.last_seen) }}</td><td class="mono">{{ p.blood_type }}</td><td class="mono" dir="ltr">{{ p.phone }}</td>
-              <td class="nowrap"><button class="btn xs" @click="editPerson(p)">{{ tr('الهوية والصورة', 'ID & photo') }}</button> <button class="btn xs" @click="callPerson(p.id)" :disabled="p.id===s.me.id">{{ tr('اتصال', 'Call') }}</button></td>
-            </tr></tbody>
-          </table></div>
-
-          <h2 class="sec gap">{{ tr('التحقق من رمز الهوية', 'Verify an ID code') }}</h2>
-          <form class="row gap8 verify" @submit.prevent="verifyId">
-            <input v-model="s.verifyCode" dir="ltr" :placeholder="tr('الصق الرمز المقروء من QR', 'Paste the code read from the QR')" :aria-label="tr('رمز الهوية', 'ID code')">
-            <button class="btn sm primary">{{ tr('تحقق', 'Verify') }}</button>
-          </form>
-          <p v-if="s.verifyResult" class="verify-result" :class="s.verifyResult.valid ? 'ok' : 'bad'">
-            <template v-if="s.verifyResult.valid">✓ {{ tr('هوية صالحة', 'Valid ID') }} — {{ s.verifyResult.profile.full_name }} · {{ s.verifyResult.profile.employee_no }} · {{ s.verifyResult.profile.job_title }}</template>
-            <template v-else>✕ {{ tr('رمز غير صالح أو منتهي (صالح 30 ثانية فقط)', 'Invalid or expired code (valid 30 seconds only)') }}</template>
-          </p>
-        </template>
-
-        <!-- REPORTS -->
-        <template v-if="s.tab==='reports'">
-          <div class="row"><h2 class="sec">{{ tr('بلاغات 160 المشفرة', 'Encrypted 160 reports') }}</h2>
-            <form v-if="!s.privKey && s.hasKey" class="row gap8" @submit.prevent="unlockKey"><input type="password" v-model="s.pass" :placeholder="tr('عبارة مرور المفتاح', 'Key passphrase')" :aria-label="tr('عبارة مرور المفتاح', 'Key passphrase')"><button class="btn sm primary">{{ tr('فتح المفتاح', 'Unlock key') }}</button></form>
-            <span v-else-if="s.privKey" class="chip ok">{{ tr('المفتاح مفتوح لهذه الجلسة', 'Key unlocked for this session') }}</span>
-          </div>
-          <p v-if="!s.hasKey" class="calm">{{ tr('لم يُنشأ مفتاح التشفير بعد. أنشئه من تبويب «مفتاح التشفير» قبل أن يرسل الموظفون البلاغات.', 'No encryption key yet. Create it under “Encryption key” before employees send reports.') }}</p>
-          <div class="reports">
-            <article v-for="r in s.reports" :key="r.id" class="report" :class="r.status">
-              <header class="row"><strong>{{ L(REPORT_TYPES[r.type]) || r.type }}</strong><span class="muted">{{ name('employee', r.user_id) }} · {{ fmt(r.created_at) }}</span></header>
-              <p class="muted">{{ name('building', r.building_id) !== '—' ? name('building', r.building_id) : name('zone', r.zone_id) }}<span class="mono" dir="ltr" v-if="r.lat"> · {{ r.lat.toFixed(5) }}, {{ r.lng.toFixed(5) }}</span> · {{ (r.photo_paths||[]).length }} {{ tr('صورة مشفرة', 'encrypted photos') }}</p>
-              <div v-if="s.opened[r.id]" class="opened">
-                <p>{{ s.opened[r.id].description || tr('بدون وصف', 'No description') }}</p>
-                <div class="photos"><img v-for="(u,i) in s.opened[r.id].photos" :key="i" :src="u" :alt="tr('صورة البلاغ', 'Report photo')"></div>
+          <!-- employees inside a building -->
+          <div v-else class="plist">
+            <div v-for="p in peopleHere" :key="p.id" class="pcard" :class="{on: isSel(p.id)}">
+              <label class="chk" :aria-label="tr('تحديد', 'Select')"><input type="checkbox" :checked="isSel(p.id)" @change="toggleSel(p.id)"></label>
+              <span class="ava" :style="avatar(p) ? {backgroundImage: 'url(' + avatar(p) + ')'} : {}"><i class="dot" :class="p.online ? 'on' : ''"></i></span>
+              <div class="grow min0">
+                <strong>{{ p.full_name }}</strong>
+                <small class="muted d">{{ p.employee_no }}<template v-if="p.job_title"> · {{ p.job_title }}</template> · {{ tr('دم', 'Blood') }} {{ p.blood_type || '—' }}</small>
+                <small class="muted d">{{ tr('آخر ظهور', 'Last seen') }} {{ ago(p.last_seen) }}</small>
               </div>
-              <div class="row gap8">
-                <button v-if="!s.opened[r.id]" class="btn sm" @click="openReport(r)">{{ tr('فك التشفير والعرض', 'Decrypt and view') }}</button>
-                <select :value="r.status" @change="setReportStatus(r, $event.target.value)" :aria-label="tr('حالة البلاغ', 'Report status')"><option v-for="(v,k) in REPORT_STATUS" :key="k" :value="k">{{ L(v) }}</option></select>
-                <button class="btn sm ghost" @click="callPerson(r.user_id)">{{ tr('اتصال بالمُبلّغ', 'Call the reporter') }}</button>
-              </div>
-            </article>
-            <p v-if="!s.reports.length" class="muted">{{ tr('لا توجد بلاغات.', 'No reports.') }}</p>
+              <span v-if="personStatus(p.id)" class="st" :class="STATUS[personStatus(p.id)][1]">{{ L(STATUS[personStatus(p.id)][0]) }}</span>
+              <button class="btn sm" @click="callPerson(p.id)" :aria-label="tr('اتصال', 'Call')">☎</button>
+            </div>
+            <p v-if="!peopleHere.length" class="calm">{{ tr('لا يوجد موظفون داخل هذا المبنى الآن.', 'Nobody is inside this building right now.') }}</p>
           </div>
-        </template>
 
-        <!-- KEYS -->
-        <template v-if="s.tab==='keys'">
-          <h2 class="sec">{{ tr('مفتاح تشفير البلاغات', 'Report encryption key') }}</h2>
-          <p class="prose">{{ tr('يشفّر تطبيق الموظف كل بلاغ وصوره على الهاتف نفسه (AES-256-GCM) قبل الإرسال، ويغلّف مفتاح البلاغ بالمفتاح العام لفريق ORT (RSA-OAEP 2048). لا يستطيع أحد غير حامل عبارة المرور قراءة البلاغات — ولا حتى مدير قاعدة البيانات. تُحذف الصور من الهاتف بعد الإرسال.', 'The employee app encrypts every report and its photos on the phone (AES-256-GCM) before sending, and wraps the report key with the ORT public key (RSA-OAEP 2048). Only holders of the passphrase can read reports — not even the database administrator. Photos are deleted from the phone after sending.') }}</p>
-          <p v-if="s.hasKey" class="chip ok">{{ tr('يوجد مفتاح فعّال', 'Active key') }} · {{ fmt(s.keyRow.updated_at) }}</p>
-          <div class="editor">
-            <h3>{{ s.hasKey ? tr('استبدال المفتاح', 'Replace the key') : tr('إنشاء المفتاح', 'Create the key') }}</h3>
-            <label for="np">{{ tr('عبارة المرور (10 أحرف على الأقل)', 'Passphrase (at least 10 characters)') }}</label><input id="np" type="password" v-model="s.newPass">
-            <label for="np2">{{ tr('تأكيد العبارة', 'Confirm passphrase') }}</label><input id="np2" type="password" v-model="s.newPass2">
-            <p v-if="s.hasKey" class="err">{{ tr('تنبيه: البلاغات القديمة لن تُقرأ بالمفتاح الجديد.', 'Warning: older reports cannot be read with a new key.') }}</p>
-            <button class="btn primary" @click="setupKeys">{{ s.confirmRotate ? tr('اضغط مجددًا لتأكيد الاستبدال', 'Click again to confirm') : (s.hasKey ? tr('استبدال المفتاح', 'Replace the key') : tr('إنشاء المفتاح', 'Create the key')) }}</button>
+          <!-- alarm action bar -->
+          <div class="actionbar">
+            <button class="btn alarm-all" @click="composeAll">🔔 {{ allLabel }}</button>
+            <button class="btn alarm-sel" :disabled="!selCount" @click="composeSelected">{{ tr('إنذار للمحدد', 'Alarm selected') }} <b>{{ selCount }}</b></button>
           </div>
-        </template>
+        </div>
+
+        <div class="mapcol">
+          <button class="btn sm ghost maptoggle" @click="s.showMap=!s.showMap">{{ s.showMap ? tr('إخفاء الخريطة', 'Hide map') : tr('عرض الخريطة', 'Show map') }}</button>
+          <div class="mapwrap" v-show="s.showMap"><div id="map"></div>
+            <button class="fit" @click="fitAll">{{ tr('عرض الكل', 'Show all') }}</button>
+            <div v-if="s.drawing" class="draw-hint">{{ tr('انقر لإضافة رؤوس المضلع، ثم انقر النقطة الأولى للإغلاق', 'Tap to add corners, then tap the first point to close') }}</div>
+          </div>
+          <div class="legend" v-show="s.showMap"><span><i style="background:#2E9E5B"></i>{{ tr('آمن', 'Safe') }}</span><span><i style="background:#E5B80B"></i>{{ tr('بدون رد', 'No reply') }}</span><span><i style="background:#C62828"></i>{{ tr('مصاب/محتجز', 'Injured/trapped') }}</span><span><i style="background:#2B4C9B"></i>{{ tr('متصل', 'Online') }}</span><span><i style="background:#94A3B8"></i>{{ tr('غير متصل', 'Offline') }}</span></div>
+        </div>
       </section>
 
-      <div class="mapwrap" v-show="!['people','reports','keys'].includes(s.tab)"><div id="map"></div>
-        <button class="fit" @click="fitAll">{{ tr('عرض الكل', 'Show all') }}</button>
-        <div v-if="s.drawing" class="draw-hint">{{ tr('انقر لإضافة رؤوس المضلع، ثم انقر النقطة الأولى للإغلاق', 'Click to add vertices, then click the first point to close') }}</div>
+      <!-- ═════ ALARMS / INCIDENTS ═════ -->
+      <section class="page" v-if="s.tab==='alarms'">
+        <div class="level-head">
+          <h2 class="sec">{{ tr('الحوادث', 'Incidents') }}</h2>
+          <button class="btn sm danger" @click="compose([{scope:'all', id:null}])">🔔 {{ tr('إنذار لجميع القطاعات', 'Alarm all sectors') }}</button>
+        </div>
+        <p class="muted hint">{{ tr('لإنذار قطاعات أو Zones أو مبانٍ أو موظفين محددين استخدم صفحة «المناطق».', 'To alarm specific sectors, zones, buildings or employees, use the Areas page.') }}</p>
+        <div class="inc-layout">
+          <div class="inc-list">
+            <button v-for="i in incidents" :key="i.key" class="inc" :class="[KINDS[i.kind].cls, {on: s.selInc===i.key, off: !i.active}]" @click="s.selInc=i.key">
+              <span class="tag">{{ L(KINDS[i.kind].short) }}</span>
+              <span class="grow min0"><b class="ellipsis">{{ atitle(i.first) }}</b><small class="ellipsis">{{ incTargets(i) }}</small></span>
+              <span class="inc-meta">{{ i.active ? tr('نشط', 'Active') : tr('مغلق', 'Closed') }}<small>{{ fmt(i.created_at) }}</small></span>
+            </button>
+            <p v-if="!incidents.length" class="calm">{{ tr('لا توجد إنذارات بعد.', 'No alarms yet.') }}</p>
+          </div>
+
+          <div v-if="selIncObj" class="roster">
+            <div class="row wrap"><h3>{{ atitle(selIncObj.first) }} <span class="chip" v-if="selIncObj.drill">{{ tr('تمرين', 'Drill') }}</span></h3>
+              <div v-if="selIncObj.active" class="row gap8 wrap"><button class="btn sm k3" @click="closeIncident(selIncObj, true)">{{ L(KINDS.signal3.label) }}</button><button class="btn sm ghost" @click="closeIncident(selIncObj,false)">{{ tr('إغلاق فقط', 'Close only') }}</button></div></div>
+            <p class="muted">{{ incTargets(selIncObj) }} · {{ tr('أطلقه', 'by') }} {{ name('employee', selIncObj.first.created_by) }}<template v-if="selIncObj.first.confirmed_by_name"> · {{ tr('أكّده', 'confirmed by') }} {{ selIncObj.first.confirmed_by_name }}</template> · {{ fmt(selIncObj.created_at) }}</p>
+            <div class="stat-grid">
+              <div><b>{{ counts(selIncObj).pct }}%</b><span>{{ tr('نسبة الحصر', 'Muster rate') }}</span></div>
+              <div class="ok"><b>{{ counts(selIncObj).safe }}</b><span>{{ tr('آمن', 'Safe') }}</span></div>
+              <div class="bad"><b>{{ counts(selIncObj).trapped }}</b><span>{{ tr('محتجز', 'Trapped') }}</span></div>
+              <div class="bad"><b>{{ counts(selIncObj).injured }}</b><span>{{ tr('مصاب', 'Injured') }}</span></div>
+              <div class="warn"><b>{{ counts(selIncObj).need_help }}</b><span>{{ tr('يحتاج مساعدة', 'Needs help') }}</span></div>
+              <div class="grey"><b>{{ counts(selIncObj).received + counts(selIncObj).none }}</b><span>{{ tr('بدون رد', 'No response') }}</span></div>
+            </div>
+            <div class="plist">
+              <div v-for="r in roster(selIncObj)" :key="r.p.id" class="pcard">
+                <span class="ava" :style="avatar(r.p) ? {backgroundImage: 'url(' + avatar(r.p) + ')'} : {}"></span>
+                <div class="grow min0">
+                  <strong>{{ r.p.full_name }}</strong>
+                  <small class="muted d">{{ where(r.p) }}<template v-if="r.k"> · {{ ago(r.k.updated_at) }}</template></small>
+                  <small class="muted d">{{ r.p.employee_no }} · {{ tr('دم', 'Blood') }} {{ r.p.blood_type || '—' }} · <span dir="ltr">{{ r.p.phone }}</span></small>
+                </div>
+                <span class="st" :class="STATUS[r.st][1]">{{ L(STATUS[r.st][0]) }}</span>
+                <button class="btn sm" @click="callPerson(r.p.id)" :aria-label="tr('اتصال', 'Call')">☎</button>
+              </div>
+              <p v-if="!roster(selIncObj).length" class="calm">{{ tr('لا أحد داخل نطاق هذا الإنذار حاليًا.', 'Nobody is inside this alarm’s scope right now.') }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════ PEOPLE ═════ -->
+      <section class="page" v-if="s.tab==='people'">
+        <div class="level-head">
+          <h2 class="sec">{{ tr('الموظفون', 'Employees') }}</h2>
+          <button class="btn sm primary" @click="newPerson">+ {{ tr('حساب موظف', 'Employee account') }}</button>
+        </div>
+        <form v-if="s.pf" class="editor grid3" @submit.prevent="savePerson">
+          <div><label for="pfn">{{ tr('الاسم الكامل', 'Full name') }}</label><input id="pfn" v-model="s.pf.full_name"></div>
+          <div><label for="pfe">{{ tr('الرقم الوظيفي', 'Employee no.') }}</label><input id="pfe" v-model="s.pf.employee_no"></div>
+          <div><label for="pfp">{{ tr('الهاتف', 'Phone') }}</label><input id="pfp" v-model="s.pf.phone" dir="ltr" placeholder="+965…"></div>
+          <div><label for="pfm">{{ tr('البريد (اسم الدخول)', 'Email (sign-in)') }}</label><input id="pfm" v-model="s.pf.email" type="email" dir="ltr"></div>
+          <div><label for="pfw">{{ tr('كلمة مرور مؤقتة', 'Temporary password') }}</label><input id="pfw" v-model="s.pf.password" dir="ltr"></div>
+          <div><label for="pfb">{{ tr('فصيلة الدم', 'Blood type') }}</label><select id="pfb" v-model="s.pf.blood_type"><option v-for="b in ['O+','O-','A+','A-','B+','B-','AB+','AB-']" :key="b">{{ b }}</option></select></div>
+          <div><label for="pfr">{{ tr('الدور', 'Role') }}</label><select id="pfr" v-model="s.pf.role"><option value="employee">{{ tr('موظف', 'Employee') }}</option><option value="ort">{{ tr('عضو ORT', 'ORT member') }}</option></select></div>
+          <div class="row gap8 end span2"><button type="button" class="btn sm ghost" @click="s.pf=null">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary">{{ tr('إنشاء الحساب', 'Create account') }}</button></div>
+        </form>
+
+        <div v-if="s.pe" id="id-editor" class="editor">
+          <div class="row"><h3>{{ tr('بيانات الهوية الرقمية', 'Digital ID details') }}</h3><button class="icon-btn" @click="s.pe=null" :aria-label="tr('إغلاق', 'Close')">✕</button></div>
+          <div class="id-edit">
+            <div class="photo-box">
+              <div class="photo" :style="s.pe.preview ? {backgroundImage: 'url(' + s.pe.preview + ')'} : {}"><svg v-if="!s.pe.preview" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0"/></svg></div>
+              <label class="btn sm upload">{{ tr('رفع الصورة الرسمية', 'Upload official photo') }}<input type="file" accept="image/*" @change="pickPhoto" hidden></label>
+              <small class="muted">{{ tr('لا يستطيع الموظف تغييرها', 'The employee can’t change it') }}</small>
+            </div>
+            <div class="grid3 grow min0">
+              <div><label for="pen">{{ tr('الاسم الكامل', 'Full name') }}</label><input id="pen" v-model="s.pe.full_name"></div>
+              <div><label for="peno">{{ tr('الرقم الوظيفي', 'Employee no.') }}</label><input id="peno" v-model="s.pe.employee_no"></div>
+              <div><label for="pej">{{ tr('المسمى الوظيفي', 'Job title') }}</label><input id="pej" v-model="s.pe.job_title"></div>
+              <div><label for="ped">{{ tr('المجموعة / الإدارة', 'Group / department') }}</label><input id="ped" v-model="s.pe.department"></div>
+              <div><label for="pep">{{ tr('الهاتف', 'Phone') }}</label><input id="pep" v-model="s.pe.phone" dir="ltr"></div>
+              <div><label for="peb">{{ tr('فصيلة الدم', 'Blood type') }}</label><select id="peb" v-model="s.pe.blood_type"><option v-for="b in ['O+','O-','A+','A-','B+','B-','AB+','AB-']" :key="b">{{ b }}</option></select></div>
+              <div><label for="pec">{{ tr('الرقم المدني', 'Civil ID') }}</label><input id="pec" v-model="s.pe.civil_id" dir="ltr"></div>
+              <div><label for="per">{{ tr('الدور', 'Role') }}</label><select id="per" v-model="s.pe.role"><option value="employee">{{ tr('موظف', 'Employee') }}</option><option value="ort">{{ tr('عضو ORT', 'ORT member') }}</option></select></div>
+              <div><label class="check"><input type="checkbox" v-model="s.pe.active"> {{ tr('موظف فعّال', 'Active employee') }}</label></div>
+            </div>
+          </div>
+          <div class="row gap8 end"><button class="btn sm ghost" @click="s.pe=null">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary" @click="savePersonEdit">{{ tr('حفظ الهوية', 'Save ID') }}</button></div>
+        </div>
+
+        <div class="toolbar">
+          <input v-model="s.pq" type="search" :placeholder="tr('بحث بالاسم أو الرقم أو الهاتف', 'Search name, number or phone')" :aria-label="tr('بحث', 'Search')">
+          <button class="btn sm danger" :disabled="!s.psel.length" @click="composePeople(s.psel)">🔔 {{ tr('إنذار للمحدد', 'Alarm selected') }} <b>{{ s.psel.length }}</b></button>
+        </div>
+        <div class="plist">
+          <div v-for="p in peopleFiltered" :key="p.id" class="pcard" :class="{on: s.psel.includes(p.id)}">
+            <label class="chk" v-if="p.role!=='ort'" :aria-label="tr('تحديد', 'Select')"><input type="checkbox" :checked="s.psel.includes(p.id)" @change="togglePsel(p.id)"></label>
+            <span class="ava" :style="avatar(p) ? {backgroundImage: 'url(' + avatar(p) + ')'} : {}"><i class="dot" :class="p.online ? 'on' : ''"></i></span>
+            <div class="grow min0">
+              <strong>{{ p.full_name }} <span v-if="p.role==='ort'" class="chip">ORT</span><span v-if="p.active===false" class="chip warn">{{ tr('موقوف', 'Inactive') }}</span></strong>
+              <small class="muted d">{{ p.employee_no }}<template v-if="p.job_title"> · {{ p.job_title }}</template> · {{ tr('دم', 'Blood') }} {{ p.blood_type || '—' }} · <span dir="ltr">{{ p.phone }}</span></small>
+              <small class="muted d">{{ where(p) }} · {{ ago(p.last_seen) }}</small>
+            </div>
+            <div class="pc-actions">
+              <button class="btn xs" @click="editPerson(p)">{{ tr('الهوية والصورة', 'ID & photo') }}</button>
+              <button class="btn xs" @click="callPerson(p.id)" :disabled="p.id===s.me.id">☎ {{ tr('اتصال', 'Call') }}</button>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="sec gap">{{ tr('التحقق من رمز الهوية', 'Verify an ID code') }}</h2>
+        <form class="toolbar" @submit.prevent="verifyId">
+          <input v-model="s.verifyCode" dir="ltr" :placeholder="tr('الصق الرمز المقروء من QR', 'Paste the code read from the QR')" :aria-label="tr('رمز الهوية', 'ID code')">
+          <button class="btn sm primary">{{ tr('تحقق', 'Verify') }}</button>
+        </form>
+        <p v-if="s.verifyResult" class="verify-result" :class="s.verifyResult.valid ? 'ok' : 'bad'">
+          <template v-if="s.verifyResult.valid">✓ {{ tr('هوية صالحة', 'Valid ID') }} — {{ s.verifyResult.profile.full_name }} · {{ s.verifyResult.profile.employee_no }} · {{ s.verifyResult.profile.job_title }}</template>
+          <template v-else>✕ {{ tr('رمز غير صالح أو منتهي (صالح 30 ثانية فقط)', 'Invalid or expired code (valid 30 seconds only)') }}</template>
+        </p>
+      </section>
+
+      <!-- ═════ REPORTS ═════ -->
+      <section class="page" v-if="s.tab==='reports'">
+        <div class="level-head"><h2 class="sec">{{ tr('بلاغات 160 المشفرة', 'Encrypted 160 reports') }}</h2>
+          <form v-if="!s.privKey && s.hasKey" class="row gap8" @submit.prevent="unlockKey"><input type="password" v-model="s.pass" :placeholder="tr('عبارة مرور المفتاح', 'Key passphrase')" :aria-label="tr('عبارة مرور المفتاح', 'Key passphrase')"><button class="btn sm primary">{{ tr('فتح', 'Unlock') }}</button></form>
+          <span v-else-if="s.privKey" class="chip ok">{{ tr('المفتاح مفتوح لهذه الجلسة', 'Key unlocked for this session') }}</span>
+        </div>
+        <p v-if="!s.hasKey" class="calm">{{ tr('لم يُنشأ مفتاح التشفير بعد. أنشئه من صفحة «التشفير» قبل أن يرسل الموظفون البلاغات.', 'No encryption key yet. Create it on the Encryption page before employees send reports.') }}</p>
+        <div class="reports">
+          <article v-for="r in s.reports" :key="r.id" class="report" :class="r.status">
+            <header class="row wrap"><strong>{{ L(REPORT_TYPES[r.type]) || r.type }}</strong><span class="muted">{{ name('employee', r.user_id) }} · {{ fmt(r.created_at) }}</span></header>
+            <p class="muted">{{ name('building', r.building_id) !== '—' ? name('building', r.building_id) : name('zone', r.zone_id) }}<span class="mono" dir="ltr" v-if="r.lat"> · {{ r.lat.toFixed(5) }}, {{ r.lng.toFixed(5) }}</span> · {{ (r.photo_paths||[]).length }} {{ tr('صورة مشفرة', 'encrypted photos') }}</p>
+            <div v-if="s.opened[r.id]" class="opened">
+              <p>{{ s.opened[r.id].description || tr('بدون وصف', 'No description') }}</p>
+              <div class="photos"><img v-for="(u,i) in s.opened[r.id].photos" :key="i" :src="u" :alt="tr('صورة البلاغ', 'Report photo')"></div>
+            </div>
+            <div class="row gap8 wrap">
+              <button v-if="!s.opened[r.id]" class="btn sm" @click="openReport(r)">{{ tr('فك التشفير والعرض', 'Decrypt and view') }}</button>
+              <select :value="r.status" @change="setReportStatus(r, $event.target.value)" :aria-label="tr('حالة البلاغ', 'Report status')"><option v-for="(v,k) in REPORT_STATUS" :key="k" :value="k">{{ L(v) }}</option></select>
+              <button class="btn sm ghost" @click="callPerson(r.user_id)">☎ {{ tr('اتصال بالمُبلّغ', 'Call the reporter') }}</button>
+            </div>
+          </article>
+          <p v-if="!s.reports.length" class="calm">{{ tr('لا توجد بلاغات.', 'No reports.') }}</p>
+        </div>
+      </section>
+
+      <!-- ═════ KEYS ═════ -->
+      <section class="page" v-if="s.tab==='keys'">
+        <h2 class="sec">{{ tr('مفتاح تشفير البلاغات', 'Report encryption key') }}</h2>
+        <p class="prose">{{ tr('يشفّر تطبيق الموظف كل بلاغ وصوره على الهاتف نفسه (AES-256-GCM) قبل الإرسال، ويغلّف مفتاح البلاغ بالمفتاح العام لفريق ORT (RSA-OAEP 2048). لا يستطيع أحد غير حامل عبارة المرور قراءة البلاغات — ولا حتى مدير قاعدة البيانات. تُحذف الصور من الهاتف بعد الإرسال.', 'The employee app encrypts every report and its photos on the phone (AES-256-GCM) before sending, and wraps the report key with the ORT public key (RSA-OAEP 2048). Only holders of the passphrase can read reports — not even the database administrator. Photos are deleted from the phone after sending.') }}</p>
+        <p v-if="s.hasKey" class="chip ok">{{ tr('يوجد مفتاح فعّال', 'Active key') }} · {{ fmt(s.keyRow.updated_at) }}</p>
+        <div class="editor narrow">
+          <h3>{{ s.hasKey ? tr('استبدال المفتاح', 'Replace the key') : tr('إنشاء المفتاح', 'Create the key') }}</h3>
+          <label for="np">{{ tr('عبارة المرور (10 أحرف على الأقل)', 'Passphrase (at least 10 characters)') }}</label><input id="np" type="password" v-model="s.newPass">
+          <label for="np2">{{ tr('تأكيد العبارة', 'Confirm passphrase') }}</label><input id="np2" type="password" v-model="s.newPass2">
+          <p v-if="s.hasKey" class="err">{{ tr('تنبيه: البلاغات القديمة لن تُقرأ بالمفتاح الجديد.', 'Warning: older reports cannot be read with a new key.') }}</p>
+          <button class="btn primary" @click="setupKeys">{{ s.confirmRotate ? tr('اضغط مجددًا لتأكيد الاستبدال', 'Click again to confirm') : (s.hasKey ? tr('استبدال المفتاح', 'Replace the key') : tr('إنشاء المفتاح', 'Create the key')) }}</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- phone bottom navigation -->
+    <nav class="bottomnav" :aria-label="tr('الأقسام', 'Sections')">
+      <button v-for="n in NAV" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="n.i"/></svg><span>{{ L(n.t) }}</span>
+        <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && kpi.active" class="red">{{ kpi.active }}</em>
+      </button>
+    </nav>
+
+    <!-- alarm composer -->
+    <div v-if="s.comp" class="modal-bg" @click.self="s.comp=null">
+      <div class="modal" role="dialog" :aria-label="tr('إطلاق إنذار', 'Launch an alarm')">
+        <div class="row"><h2 class="sec">{{ tr('إطلاق إنذار', 'Launch an alarm') }}</h2><button class="icon-btn" @click="s.comp=null" :aria-label="tr('إغلاق', 'Close')">✕</button></div>
+        <div class="targets">
+          <span v-for="(t,i) in s.comp.targets.slice(0,12)" :key="i" class="chip">{{ targetLabel(t) }}</span>
+          <span v-if="s.comp.targets.length>12" class="chip">+{{ s.comp.targets.length-12 }}</span>
+        </div>
+        <p class="reach">{{ tr('يصل إلى', 'Reaches') }} <b>{{ compReach }}</b> {{ tr('موظفًا داخل الحدود الآن', 'people inside now') }}<span class="muted"> — {{ tr('ولكل من يدخلها ما دام الإنذار نشطًا', 'and anyone entering while it is active') }}</span></p>
+        <div class="kinds">
+          <button v-for="(k,key) in KINDS" :key="key" class="kind" :class="[k.cls, {on: s.comp.kind===key}]" @click="setKind(key)">{{ L(k.label) }}</button>
+        </div>
+        <button class="linkbtn" @click="s.comp.showText=!s.comp.showText">{{ s.comp.showText ? '▾' : '▸' }} {{ tr('نص الإنذار (عربي / إنجليزي)', 'Alarm text (Arabic / English)') }}</button>
+        <div v-show="s.comp.showText || s.comp.kind==='message'">
+          <div class="two">
+            <div><label for="ttl">{{ tr('العنوان (عربي)', 'Title (Arabic)') }}</label><input id="ttl" v-model="s.comp.title" dir="rtl"></div>
+            <div><label for="ttle">{{ tr('العنوان (إنجليزي)', 'Title (English)') }}</label><input id="ttle" v-model="s.comp.title_en" dir="ltr"></div>
+          </div>
+          <div class="two">
+            <div><label for="bdy">{{ tr('التعليمات (عربي)', 'Instructions (Arabic)') }}</label><textarea id="bdy" v-model="s.comp.body" rows="4" dir="rtl"></textarea></div>
+            <div><label for="bdye">{{ tr('التعليمات (إنجليزي)', 'Instructions (English)') }}</label><textarea id="bdye" v-model="s.comp.body_en" rows="4" dir="ltr"></textarea></div>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" v-model="s.comp.drill"> {{ tr('وضع التمرين (Drill)', 'Drill mode') }}</label>
+        <fieldset v-if="s.comp.kind!=='message'" class="dual">
+          <legend>{{ tr('تأكيد ثنائي', 'Dual confirmation') }}</legend>
+          <label for="sec2">{{ tr('اسم الضابط الثاني المؤكِّد', 'Second confirming officer') }}</label><input id="sec2" v-model="s.comp.second" :placeholder="tr('مثال: مشرف الوردية', 'e.g. shift supervisor')">
+          <label class="check"><input type="checkbox" v-model="s.comp.confirm"> {{ tr('أؤكد إطلاق', 'I confirm launching') }} {{ L(KINDS[s.comp.kind].short) }}</label>
+        </fieldset>
+        <button class="btn launch" :class="KINDS[s.comp.kind].cls" :disabled="s.comp.busy" @click="launchComp">{{ s.comp.busy ? tr('جارٍ الإطلاق…', 'Launching…') : tr('إطلاق', 'Launch') + ' ' + L(KINDS[s.comp.kind].short) }}</button>
       </div>
     </div>
 
-    </div>
-    <!-- Call overlay -->
+    <!-- call overlay -->
     <div v-if="s.call" class="call" role="dialog" :aria-label="tr('مكالمة صوتية', 'Voice call')">
       <div class="pulse" :class="s.callState"></div>
-      <div><strong>{{ s.call.full_name }}</strong><div class="muted">{{ L(CALL_LABEL[s.callState]) || s.callState }}</div><div class="mono muted" dir="ltr">{{ s.call.phone }}</div></div>
+      <div class="grow min0"><strong>{{ s.call.full_name }}</strong><div class="muted">{{ L(CALL_LABEL[s.callState]) || s.callState }}</div><div class="mono muted" dir="ltr">{{ s.call.phone }}</div></div>
       <button class="btn sm ghost" @click="toggleMute">{{ s.muted ? tr('إلغاء الكتم', 'Unmute') : tr('كتم', 'Mute') }}</button>
       <button class="btn sm danger" @click="hangup">{{ tr('إنهاء', 'Hang up') }}</button>
     </div>

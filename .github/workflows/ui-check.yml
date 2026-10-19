@@ -1,0 +1,31 @@
+name: Dashboard UI check
+
+on:
+  workflow_run:
+    workflows: ["KOC ONE · build"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  screenshots:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null
+          npm i playwright@1.48.2
+          npx playwright install --with-deps chromium
+      - name: Wait for Pages to serve the latest version
+        run: sleep 30
+      - name: Screenshots and error check
+        run: node tool/ui_check.mjs "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" ui-shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-shots
+          path: ui-shots
