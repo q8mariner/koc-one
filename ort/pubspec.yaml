@@ -1,0 +1,22 @@
+name: one_ort
+description: ONE ORT — the ORT console (same pages as the web dashboard) as an Android app, with biometrics, permissions and background notifications.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.10.0
+  webview_flutter_android: ^4.0.0
+  local_auth: ^2.3.0
+  flutter_secure_storage: ^9.2.2
+  permission_handler: ^11.3.1
+  flutter_local_notifications: ^18.0.1
+  shared_preferences: ^2.3.2
+  image_picker: ^1.1.2
+
+flutter:
+  uses-material-design: true

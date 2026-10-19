@@ -31,6 +31,13 @@
       <input id="pw" type="password" v-model="s.password" autocomplete="current-password" required dir="ltr">
       <p class="err" v-if="s.authErr">{{ s.authErr }}</p>
       <button class="btn primary" :disabled="s.busy">{{ s.busy ? tr('جارٍ الدخول…', 'Signing in…') : tr('دخول', 'Sign in') }}</button>
+      <template v-if="s.app && s.nat.bioSaved">
+        <div class="or"><span>{{ tr('أو', 'or') }}</span></div>
+        <button type="button" class="btn bio" :disabled="s.busy" @click="bioLogin">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11v3m-4-6a5 5 0 0 1 8 0m-10 3a7 7 0 0 1 12 0m-9 7c1-2 1-4 1-6a2 2 0 0 1 4 0c0 3-.5 5-1.5 7M5 15c.5-1 .5-2 .5-4M19 13c0 2-.3 4-1 6"/></svg>
+          {{ tr('الدخول بالوجه أو البصمة', 'Sign in with face or fingerprint') }}</button>
+        <small class="muted center" dir="ltr">{{ s.nat.bioSaved }}</small>
+      </template>
     </form>
   </main>
 
@@ -413,6 +420,65 @@
         </div>
       </section>
 
+      <!-- ═════ SETTINGS ═════ -->
+      <section class="page settings" v-if="s.tab==='settings'">
+        <div class="set-card">
+          <h3>{{ tr('اللغة', 'Language') }}</h3>
+          <div class="seg"><button :class="{on: s.lang==='ar'}" @click="s.lang!=='ar' && toggleLang()">العربية</button><button :class="{on: s.lang==='en'}" @click="s.lang!=='en' && toggleLang()">English</button></div>
+        </div>
+
+        <div class="set-card" v-if="s.app">
+          <h3>{{ tr('الأذونات', 'Permissions') }}</h3>
+          <div v-for="pm in [
+              {k:'notif', t:tr('الإشعارات','Notifications'), d:tr('تنبيهك بالبلاغات وانقطاع الإشارة وطلبات المساعدة والتطبيق في الخلفية','Alerts for reports, signal loss and help requests while the app is in the background')},
+              {k:'mic', t:tr('الميكروفون','Microphone'), d:tr('للاتصال الصوتي بالموظفين','For voice calls to employees')},
+              {k:'loc', t:tr('الموقع','Location'), d:tr('لزر «موقعي» عند رسم الحدود','For “my location” when drawing boundaries')},
+              {k:'cam', t:tr('الكاميرا والصور','Camera & photos'), d:tr('لرفع صور هويات الموظفين','To upload employee ID photos')}]" :key="pm.k" class="perm">
+            <span class="pdot" :class="s.nat.perms[pm.k] ? 'ok' : 'no'">{{ s.nat.perms[pm.k] ? '✓' : '!' }}</span>
+            <div class="grow min0"><b>{{ pm.t }}</b><small class="muted d">{{ pm.d }}</small></div>
+            <button v-if="!s.nat.perms[pm.k]" class="btn xs" @click="permRequest(pm.k)">{{ tr('تفعيل', 'Enable') }}</button>
+          </div>
+        </div>
+
+        <div class="set-card" v-if="s.app">
+          <h3>{{ tr('الدخول بالوجه أو البصمة', 'Face / fingerprint sign-in') }}</h3>
+          <template v-if="!s.nat.bio"><p class="muted">{{ tr('هذا الهاتف لا يدعم الوجه أو البصمة، أو لم تُسجَّل في إعدادات الهاتف.', 'This phone has no face / fingerprint set up.') }}</p></template>
+          <template v-else-if="s.nat.bioEnabled">
+            <p class="okc">✓ {{ tr('مفعّل — زر الدخول بالوجه أو البصمة في صفحة الدخول، ويُطلب عند فتح التطبيق وبعد دقيقة في الخلفية.', 'On — a face / fingerprint button on the sign-in page; also asked when the app opens and after a minute in the background.') }}</p>
+            <button class="btn sm ghost" @click="disableBio">{{ tr('إيقاف', 'Turn off') }}</button>
+          </template>
+          <template v-else>
+            <p class="muted">{{ tr('أدخل كلمة المرور مرة واحدة؛ تُحفظ مشفّرة على هذا الهاتف ولا تُستخدم إلا بعد التحقق من وجهك أو بصمتك.', 'Enter your password once; it is stored encrypted on this phone and used only after your face / fingerprint is verified.') }}</p>
+            <button v-if="!s.st.bioOpen" class="btn sm primary" @click="s.st.bioOpen=true">{{ tr('تفعيل', 'Turn on') }}</button>
+            <form v-else class="row gap8 wrap" @submit.prevent="enableBio">
+              <input type="password" v-model="s.st.bioPass" :placeholder="tr('كلمة المرور', 'Password')" dir="ltr" class="grow" autocomplete="current-password">
+              <button class="btn sm primary" :disabled="s.st.bioBusy">{{ s.st.bioBusy ? tr('جارٍ التحقق…', 'Verifying…') : tr('متابعة', 'Continue') }}</button>
+              <button type="button" class="btn sm ghost" @click="s.st.bioOpen=false; s.st.bioPass=''">{{ tr('إلغاء', 'Cancel') }}</button>
+            </form>
+            <p v-if="s.st.bioMsg" class="err">{{ s.st.bioMsg }}</p>
+          </template>
+        </div>
+
+        <div class="set-card">
+          <h3>{{ tr('تغيير كلمة المرور', 'Change password') }}</h3>
+          <p class="muted" dir="ltr" style="text-align:start">{{ s.session && s.session.user.email }}</p>
+          <form class="pwform" @submit.prevent="changePassword">
+            <label for="pc">{{ tr('كلمة المرور الحالية', 'Current password') }}</label><input id="pc" type="password" v-model="s.st.cur" dir="ltr" autocomplete="current-password">
+            <label for="p1">{{ tr('كلمة المرور الجديدة (8 أحرف على الأقل)', 'New password (8+ characters)') }}</label><input id="p1" type="password" v-model="s.st.n1" dir="ltr" autocomplete="new-password">
+            <label for="p2">{{ tr('تأكيد كلمة المرور الجديدة', 'Confirm new password') }}</label><input id="p2" type="password" v-model="s.st.n2" dir="ltr" autocomplete="new-password">
+            <p v-if="s.st.msg" :class="s.st.ok ? 'okc' : 'err'">{{ s.st.msg }}</p>
+            <button class="btn sm primary" :disabled="s.st.busy">{{ s.st.busy ? tr('جارٍ الحفظ…', 'Saving…') : tr('حفظ كلمة المرور', 'Save password') }}</button>
+          </form>
+        </div>
+
+        <div class="set-card">
+          <h3>{{ tr('الأمان', 'Security') }}</h3>
+          <button class="linkbtn" @click="s.tab='keys'">🔑 {{ tr('مفتاح تشفير بلاغات 160', '160 report encryption key') }} ›</button>
+        </div>
+
+        <button class="btn signout" @click="logout">{{ tr('تسجيل الخروج', 'Sign out') }}</button>
+      </section>
+
       <!-- ═════ KEYS ═════ -->
       <section class="page" v-if="s.tab==='keys'">
         <h2 class="sec">{{ tr('مفتاح تشفير البلاغات', 'Report encryption key') }}</h2>
@@ -430,7 +496,7 @@
 
     <!-- phone bottom navigation -->
     <nav class="bottomnav" :aria-label="tr('الأقسام', 'Sections')">
-      <button v-for="n in NAV" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k">
+      <button v-for="n in NAV_MOB" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="n.i"/></svg><span>{{ L(n.t) }}</span>
         <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && (kpi.active || kpi.lost)" class="red">{{ kpi.active + kpi.lost }}</em>
       </button>

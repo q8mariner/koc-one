@@ -298,6 +298,26 @@ button.st { border: 0; cursor: pointer; font: inherit; }
 .post .pk { color: var(--pc, var(--navy)); font-weight: 800; font-size: 13px; }
 .post .pbody { margin: 0; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
 
+/* ── settings ── */
+.settings { max-width: 720px; display: flex; flex-direction: column; gap: 12px; }
+.set-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.set-card h3 { margin: 0; color: var(--navy); font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.set-card h3::before { content: ""; width: 5px; height: 16px; background: var(--yellow); transform: skewX(-18deg); }
+.set-card p { margin: 0; }
+.set-card .seg { align-self: flex-start; }
+.perm { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px dashed var(--line); }
+.perm:first-of-type { border-top: 0; }
+.pdot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; flex: none; }
+.pdot.ok { background: #E6F4EC; color: #1F7A45; } .pdot.no { background: #FDE6D3; color: #A4501A; }
+.pwform { display: flex; flex-direction: column; gap: 2px; }
+.pwform .btn { align-self: flex-start; margin-top: 8px; }
+.btn.signout { border-color: var(--bad); color: var(--bad); background: #fff; padding: 12px; font-weight: 700; max-width: 720px; }
+.login-card .or { display: flex; align-items: center; gap: 10px; color: var(--muted); margin: 14px 0 4px; font-size: 13px; }
+.login-card .or::before, .login-card .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.btn.bio { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px solid var(--navy); color: var(--navy); background: #fff; padding: 12px; font-weight: 700; margin-top: 8px; }
+.btn.bio svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.center { text-align: center; display: block; margin-top: 4px; }
+
 /* ── tablet ── */
 @media (max-width: 1180px) {
   .areas { grid-template-columns: minmax(0, 1fr) minmax(280px, 42%); }

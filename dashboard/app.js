@@ -35,8 +35,24 @@ const NAV = [
   { k: "people", t: { ar: "الموظفون", en: "Employees" }, tag: { ar: "الحسابات والهويات", en: "Accounts & IDs" }, h: { ar: "الموظفون وجهات الاتصال", en: "Employees and contacts" }, i: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7 8v-1a3 3 0 0 0-2-3m-1-9a3 3 0 0 1 0 6" },
   { k: "reports", t: { ar: "بلاغات 160", en: "160 reports" }, tag: { ar: "بلاغات مشفرة", en: "Encrypted reports" }, h: { ar: "بلاغات 160 مع الصور", en: "160 reports with photos" }, i: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" },
   { k: "pm", t: { ar: "PM", en: "PM" }, tag: { ar: "Postmaster", en: "Postmaster" }, h: { ar: "الأخبار والفعاليات والتعاميم", en: "News, events and circulars" }, i: "M4 6h16v12H4zM4 7l8 6 8-6" },
-  { k: "keys", t: { ar: "التشفير", en: "Encryption" }, tag: { ar: "الأمان", en: "Security" }, h: { ar: "مفتاح تشفير البلاغات", en: "Report encryption key" }, i: "M8 15a4 4 0 1 1 3-6.6L21 8v4h-2v2h-2v2h-3l-2.5-2.4A4 4 0 0 1 8 15zm-1-4h.01" },
+  { k: "keys", mob: false, t: { ar: "التشفير", en: "Encryption" }, tag: { ar: "الأمان", en: "Security" }, h: { ar: "مفتاح تشفير البلاغات", en: "Report encryption key" }, i: "M8 15a4 4 0 1 1 3-6.6L21 8v4h-2v2h-2v2h-3l-2.5-2.4A4 4 0 0 1 8 15zm-1-4h.01" },
+  { k: "settings", t: { ar: "الإعدادات", en: "Settings" }, tag: { ar: "الحساب", en: "Account" }, h: { ar: "الإعدادات", en: "Settings" }, i: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14.5 2h-5l-.4 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2l.4 2.6h5l.4-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z" },
 ];
+const NAV_MOB = NAV.filter((n) => n.mob !== false);
+
+// ── Native bridge: present only inside the ONE ORT Android app (window.OneNative) ──
+const IN_APP = typeof window.OneNative !== "undefined";
+const _pend = {}; let _nid = 0;
+window.__oneReply = (id, res) => { const f = _pend[id]; if (f) { delete _pend[id]; f(res); } };
+function native(cmd, args = {}) {
+  if (!IN_APP) return Promise.resolve(null);
+  return new Promise((res) => {
+    const id = ++_nid; _pend[id] = res;
+    try { window.OneNative.postMessage(JSON.stringify({ id, cmd, args })); } catch (_) { delete _pend[id]; res(null); }
+    setTimeout(() => { if (_pend[id]) { delete _pend[id]; res(null); } }, 90000);
+  });
+}
+const nativeNotify = (title, body) => { if (IN_APP) native("notify", { title, body }); };
 const POST_KINDS = {
   news: { ar: "خبر", en: "News", c: "#2B4C9B" }, event: { ar: "فعالية", en: "Event", c: "#0E7490" }, circular: { ar: "تعميم", en: "Circular", c: "#B45309" },
   offer: { ar: "عرض", en: "Offer", c: "#2E9E5B" }, announcement: { ar: "إعلان", en: "Announcement", c: "#6D28D9" },
@@ -85,6 +101,9 @@ createApp({
       losses: [], clr: null, lossFilter: "all",
       // PM posts
       posts: [], postForm: null, postKind: "all",
+      // settings / app
+      app: IN_APP, nat: { bio: false, bioSaved: null, bioEnabled: false, perms: {} },
+      st: { cur: "", n1: "", n2: "", msg: "", ok: false, busy: false, bioOpen: false, bioPass: "", bioMsg: "", bioBusy: false },
     });
 
     let map, layers, peopleLayer, drawLayer, caller;
@@ -101,6 +120,7 @@ createApp({
     function toggleLang() {
       s.lang = s.lang === "ar" ? "en" : "ar";
       try { localStorage.setItem("one.lang", s.lang); } catch (_) {}
+      native("lang", { lang: s.lang });
       applyLang(); drawAreas(); drawPeople();
     }
     const byId = (arr, id) => arr.find((x) => x.id === id);
@@ -114,7 +134,50 @@ createApp({
       s.busy = true; s.authErr = "";
       const { error } = await sb.auth.signInWithPassword({ email: s.email.trim(), password: s.password });
       s.busy = false; if (error) s.authErr = tr("تعذّر الدخول: تحقق من البريد وكلمة المرور.", "Sign-in failed: check the email and password.");
+      else native("passwordLogin", { email: s.email.trim(), password: s.password });
     }
+    async function bioLogin() {
+      s.authErr = ""; s.busy = true;
+      const r = await native("bioLogin");
+      if (!r || !r.email) { s.busy = false; s.authErr = (r && r.error) || tr("لم يتم التحقق من الوجه أو البصمة.", "Face / fingerprint not verified."); return; }
+      const { error } = await sb.auth.signInWithPassword({ email: r.email, password: r.password });
+      s.busy = false;
+      if (error) { s.authErr = tr("تغيّرت كلمة المرور. ادخل بكلمة المرور ثم فعّل البصمة من جديد في الإعدادات.", "The password changed. Sign in with it, then turn the fingerprint on again in Settings."); native("bioDisable"); refreshNative(); }
+    }
+    watch(() => s.tab, (t) => { if (t === "settings") refreshNative(); });
+    async function refreshNative() { const r = await native("info", { lang: s.lang }); if (r) s.nat = { ...s.nat, ...r }; }
+
+    // ───── Settings ─────
+    async function changePassword() {
+      const t = s.st; t.msg = ""; t.ok = false;
+      if (t.n1.length < 8) return (t.msg = tr("كلمة المرور الجديدة 8 أحرف على الأقل.", "The new password needs at least 8 characters."));
+      if (t.n1 !== t.n2) return (t.msg = tr("كلمتا المرور غير متطابقتين.", "The passwords don’t match."));
+      if (t.n1 === t.cur) return (t.msg = tr("اختر كلمة مرور مختلفة عن الحالية.", "Choose a password different from the current one."));
+      t.busy = true;
+      const email = s.session.user.email;
+      const chk = await sb.auth.signInWithPassword({ email, password: t.cur });
+      if (chk.error) { t.busy = false; return (t.msg = tr("كلمة المرور الحالية غير صحيحة.", "The current password is wrong.")); }
+      const { error } = await sb.auth.updateUser({ password: t.n1 });
+      t.busy = false;
+      if (error) return (t.msg = tr("تعذّر التغيير: ", "Couldn’t change it: ") + error.message);
+      native("passwordChanged", { email, password: t.n1 });
+      t.cur = t.n1 = t.n2 = ""; t.ok = true; t.msg = tr("تم تغيير كلمة المرور.", "Password changed.");
+    }
+    async function enableBio() {
+      const t = s.st; t.bioMsg = "";
+      if (!t.bioPass) return (t.bioMsg = tr("أدخل كلمة المرور.", "Enter your password."));
+      t.bioBusy = true;
+      const email = s.session.user.email;
+      const chk = await sb.auth.signInWithPassword({ email, password: t.bioPass });
+      if (chk.error) { t.bioBusy = false; return (t.bioMsg = tr("كلمة المرور غير صحيحة.", "Wrong password.")); }
+      const r = await native("bioEnable", { email, password: t.bioPass });
+      t.bioBusy = false;
+      if (!r || !r.ok) return (t.bioMsg = (r && r.error) || tr("لم يتم التحقق — لم يُفعَّل.", "Not verified — not turned on."));
+      t.bioPass = ""; t.bioOpen = false; await refreshNative();
+      toast(tr("فُعّل: ادخل بالوجه أو البصمة، ويُطلب أيضًا عند فتح التطبيق.", "On: sign in with face / fingerprint; it is also asked when the app opens."));
+    }
+    async function disableBio() { await native("bioDisable"); await refreshNative(); toast(tr("أُلغي الدخول بالوجه والبصمة.", "Face / fingerprint sign-in turned off.")); }
+    async function permRequest(name) { const r = await native("permRequest", { name }); if (r) s.nat.perms = r; }
     async function logout() { await sb.auth.signOut(); location.reload(); }
 
     async function boot() {
@@ -151,7 +214,13 @@ createApp({
     function subscribe() {
       sb.channel("ort-live")
         .on("postgres_changes", { event: "*", schema: "public", table: "alarms" }, ({ new: r }) => { r && r.id && upsertLocal(s.alarms, r); })
-        .on("postgres_changes", { event: "*", schema: "public", table: "alarm_acks" }, ({ new: r }) => { if (r && r.alarm_id) upsertLocal(s.acks, r, (x) => x.alarm_id + x.user_id); drawPeople(); })
+        .on("postgres_changes", { event: "*", schema: "public", table: "alarm_acks" }, ({ new: r }) => {
+          if (!r || !r.alarm_id) return;
+          const was = s.acks.find((x) => x.alarm_id === r.alarm_id && x.user_id === r.user_id);
+          upsertLocal(s.acks, r, (x) => x.alarm_id + x.user_id); drawPeople();
+          if (["trapped", "injured", "need_help"].includes(r.status) && (!was || was.status !== r.status))
+            nativeNotify(tr("موظف يحتاج مساعدة", "Employee needs help"), name("employee", r.user_id) + " · " + lt(STATUS[r.status][0]));
+        })
         .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, ({ new: r }) => { if (r && r.id) { upsertLocal(s.people, r); drawPeople(); } })
         .on("postgres_changes", { event: "*", schema: "public", table: "signal_losses" }, ({ new: r, old }) => {
           if (!r || !r.id) return;
@@ -159,10 +228,13 @@ createApp({
           upsertLocal(s.losses, r); drawPeople();
           if (r.status === "open" && (!was || was.status !== "open")) {
             toast(tr("انقطعت إشارة موقع ", "Location signal lost: ") + name("employee", r.user_id) + tr(" أثناء إنذار — تأكد من سلامته", " during an alarm — check they are safe"));
-            beep();
+            beep(); nativeNotify(tr("انقطاع إشارة أثناء إنذار", "Signal lost during an alarm"), name("employee", r.user_id) + " · " + lossArea(r));
           }
         })
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "reports" }, ({ new: r }) => { s.reports.unshift(r); toast(tr("بلاغ جديد وارد إلى 160 — ", "New 160 report — ") + (lt(REPORT_TYPES[r.type]) || r.type)); beep(); })
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "reports" }, ({ new: r }) => {
+          s.reports.unshift(r); const m = tr("بلاغ جديد وارد إلى 160 — ", "New 160 report — ") + (lt(REPORT_TYPES[r.type]) || r.type);
+          toast(m); beep(); nativeNotify(tr("بلاغ 160 جديد", "New 160 report"), m + " · " + name("employee", r.user_id));
+        })
         .subscribe();
     }
     function beep() { try { const a = new AudioContext(), o = a.createOscillator(); o.frequency.value = 880; o.connect(a.destination); o.start(); o.stop(a.currentTime + 0.25); } catch (_) {} }
@@ -676,13 +748,14 @@ createApp({
       const { data } = await sb.auth.getSession(); s.session = data.session;
       sb.auth.onAuthStateChange((_e, sess) => { const was = !!s.session; s.session = sess; if (sess && !was) boot(); });
       applyLang();
+      refreshNative();
       if (s.session) boot();
       setInterval(() => { s._tick = Date.now(); }, 30000);
       setInterval(() => { if (s.session && map) drawPeople(); }, 10000); // expire people who left a boundary
     });
 
     return {
-      s, L: lt, tr, atitle, curNav, toggleLang, NAV, ITEM_TYPES, KINDS, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, NO_BUILDING,
+      s, L: lt, tr, atitle, curNav, toggleLang, NAV, NAV_MOB, bioLogin, refreshNative, changePassword, enableBio, disableBio, permRequest, ITEM_TYPES, KINDS, SCOPES, STATUS, CLASSES, REPORT_TYPES, REPORT_STATUS, CALL_LABEL, NO_BUILDING,
       login, logout, name, fmt, ago, staff, kpi,
       // areas
       level, levelItems, levelTitle, addLabel, allLabel, childInfo, peopleHere, noBuildingCount, drill, openNoBuilding, goLevel,
