@@ -368,6 +368,51 @@
         </div>
       </section>
 
+      <!-- ═════ PM · POSTS ═════ -->
+      <section class="page" v-if="s.tab==='pm'">
+        <div class="level-head">
+          <h2 class="sec">{{ tr('منشورات PM', 'PM posts') }}</h2>
+          <button class="btn sm primary" @click="newPost">+ {{ tr('منشور جديد', 'New post') }}</button>
+        </div>
+        <p class="muted hint">{{ tr('ما تنشره هنا يظهر فورًا لكل الموظفين في قسم PM في التطبيق.', 'What you publish here shows immediately to every employee in the app’s PM tab.') }}</p>
+
+        <form v-if="s.postForm" id="post-form" class="editor grid3" @submit.prevent="savePost">
+          <div class="span2 row"><h3>{{ s.postForm.id ? tr('تعديل منشور', 'Edit post') : tr('منشور جديد', 'New post') }}</h3><button type="button" class="icon-btn" @click="s.postForm=null" :aria-label="tr('إغلاق', 'Close')">✕</button></div>
+          <div class="span2"><label>{{ tr('النوع', 'Type') }}</label>
+            <div class="seg"><button type="button" v-for="(k,id) in POST_KINDS" :key="id" :class="{on: s.postForm.kind===id}" @click="s.postForm.kind=id">{{ L(k) }}</button></div></div>
+          <div><label for="pt">{{ tr('العنوان (عربي)', 'Title (Arabic)') }}</label><input id="pt" v-model="s.postForm.title" dir="rtl"></div>
+          <div><label for="pte">{{ tr('العنوان (إنجليزي — اختياري)', 'Title (English — optional)') }}</label><input id="pte" v-model="s.postForm.title_en" dir="ltr"></div>
+          <div class="span2"><label for="pb">{{ tr('النص (عربي)', 'Text (Arabic)') }}</label><textarea id="pb" rows="4" v-model="s.postForm.body" dir="rtl"></textarea></div>
+          <div class="span2"><label for="pbe">{{ tr('النص (إنجليزي — اختياري)', 'Text (English — optional)') }}</label><textarea id="pbe" rows="3" v-model="s.postForm.body_en" dir="ltr"></textarea></div>
+          <template v-if="s.postForm.kind==='event'">
+            <div><label for="pev">{{ tr('موعد الفعالية', 'Event date & time') }}</label><input id="pev" type="datetime-local" v-model="s.postForm.event_at"></div>
+            <div><label for="ploc">{{ tr('المكان', 'Location') }}</label><input id="ploc" v-model="s.postForm.location"></div>
+          </template>
+          <label class="check span2"><input type="checkbox" v-model="s.postForm.pinned"> {{ tr('تثبيت في أعلى القائمة', 'Pin to the top') }}</label>
+          <div class="row gap8 end span2"><button type="button" class="btn sm ghost" @click="s.postForm=null">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary">{{ s.postForm.id ? tr('حفظ', 'Save') : tr('نشر', 'Publish') }}</button></div>
+        </form>
+
+        <div class="seg" style="margin-bottom:12px">
+          <button :class="{on: s.postKind==='all'}" @click="s.postKind='all'">{{ tr('الكل', 'All') }}</button>
+          <button v-for="(k,id) in POST_KINDS" :key="id" :class="{on: s.postKind===id}" @click="s.postKind=id">{{ L(k) }}</button>
+        </div>
+        <div class="posts">
+          <article v-for="p in postsShown" :key="p.id" class="post" :style="{'--pc': POST_KINDS[p.kind]?.c}">
+            <header class="row wrap">
+              <span class="pk">{{ L(POST_KINDS[p.kind]) }}</span>
+              <span v-if="p.pinned" class="chip warn">{{ tr('مثبّت', 'Pinned') }}</span>
+              <span v-if="p.demo" class="chip">{{ tr('تجريبي', 'Demo') }}</span>
+              <span class="muted grow" style="text-align:end">{{ fmt(p.created_at) }}</span>
+            </header>
+            <h3>{{ ptitle(p) }}</h3>
+            <p class="pbody">{{ pbody(p) }}</p>
+            <p v-if="p.event_at" class="muted">🗓 {{ fmt(p.event_at) }}<template v-if="p.location"> · {{ p.location }}</template></p>
+            <div class="row gap8"><button class="btn xs" @click="editPost(p)">✎ {{ tr('تعديل', 'Edit') }}</button><button class="btn xs warn" @click="deletePost(p)">{{ tr('حذف', 'Delete') }}</button></div>
+          </article>
+          <p v-if="!postsShown.length" class="calm">{{ tr('لا توجد منشورات.', 'No posts.') }}</p>
+        </div>
+      </section>
+
       <!-- ═════ KEYS ═════ -->
       <section class="page" v-if="s.tab==='keys'">
         <h2 class="sec">{{ tr('مفتاح تشفير البلاغات', 'Report encryption key') }}</h2>

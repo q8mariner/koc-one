@@ -441,3 +441,24 @@ create trigger alarms_scan_signal after insert on public.alarms for each stateme
 create extension if not exists pg_cron;
 select cron.unschedule(jobid) from cron.job where jobname = 'scan-signal';
 select cron.schedule('scan-signal', '30 seconds', 'select public.scan_signal()');
+
+-- ── PM (postmaster): news, events, circulars, offers, announcements ──
+create table if not exists public.posts (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('news', 'event', 'circular', 'offer', 'announcement')),
+  title text not null,
+  title_en text,
+  body text not null default '',
+  body_en text,
+  event_at timestamptz,
+  location text,
+  pinned boolean not null default false,
+  demo boolean not null default false,   -- sample posts for testing: delete from posts where demo;
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists posts_created on public.posts(created_at desc);
+alter table public.posts enable row level security;
+create policy "signed-in read posts" on public.posts for select using (auth.uid() is not null);
+create policy "ort writes posts" on public.posts for all using (public.is_ort()) with check (public.is_ort());
+alter publication supabase_realtime add table public.posts;

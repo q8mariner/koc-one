@@ -1,10 +1,13 @@
-// Settings: language, password, face / fingerprint unlock, sign out.
+// Settings: language, permissions, password, face / fingerprint unlock, sign out.
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../i18n.dart';
 import '../services/applock.dart';
 import '../services/live.dart';
+import '../services/native_alarm.dart';
+import '../services/notify.dart';
 import '../ui.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -13,21 +16,85 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   final _cur = TextEditingController(), _new = TextEditingController(), _new2 = TextEditingController();
   bool _pwOpen = false, _pwBusy = false, _bioAvail = false, _bioBusy = false, _hasSaved = false;
   String? _pwMsg;
   bool _pwOk = false;
 
+  // permission status (null = not checked yet)
+  Map<String, bool>? _perm;
+
+  Future<void> _checkPerms() async {
+    final native = await NativeAlarm.status();
+    final r = <String, bool>{
+      'notif': await Permission.notification.isGranted,
+      'loc': await Permission.locationAlways.isGranted,
+      'mic': await Permission.microphone.isGranted,
+      'cam': await Permission.camera.isGranted,
+      ...native,
+    };
+    await NativeAlarm.ensureChannels();
+    if (mounted) setState(() => _perm = r);
+  }
+
+  Future<void> _requestAll() async {
+    await Notify.requestPermissions();
+    await [Permission.location, Permission.microphone, Permission.camera].request();
+    if (await Permission.location.isGranted) await Permission.locationAlways.request();
+    await _checkPerms();
+  }
+
+  Future<void> _fixLocation() async {
+    final st = await Permission.location.request();
+    if (st.isGranted) {
+      final always = await Permission.locationAlways.request();
+      if (!always.isGranted) await openAppSettings();
+    } else {
+      await openAppSettings();
+    }
+    await _checkPerms();
+  }
+
+  Future<void> _fix(Permission p) async {
+    final st = await p.request();
+    if (!st.isGranted) await openAppSettings();
+    await _checkPerms();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    if (s == AppLifecycleState.resumed) _checkPerms();
+  }
+
+  Widget _permRow(String title, String sub, String key, Future<void> Function() fix) {
+    final done = _perm?[key] ?? true;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(children: [
+        Icon(done ? Icons.check_circle : Icons.error_outline, color: done ? C.ok : C.warn),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(sub, style: const TextStyle(color: C.muted, fontSize: 12)),
+        ])),
+        if (!done) TextButton(onPressed: fix, child: Text(tr('تفعيل', 'Enable'))),
+      ]),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkPerms();
     AppLock.I.available().then((v) { if (mounted) setState(() => _bioAvail = v); });
     AppLock.I.savedEmail().then((e) { if (mounted) setState(() => _hasSaved = e != null); });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _cur.dispose(); _new.dispose(); _new2.dispose();
     super.dispose();
   }
@@ -128,6 +195,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             showSelectedIcon: false,
             onSelectionChanged: (v) { if (v.first != Lang.I.value) Lang.I.toggle(); },
           ),
+        ),
+
+        // permissions
+        SectionTitle(tr('الأذونات', 'Permissions')),
+        OneCard(
+          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _permRow(tr('الإشعارات', 'Notifications'), tr('لوصول الإنذارات والتنبيهات', 'So alarms and alerts reach you'), 'notif', () => _fix(Permission.notification)),
+            _permRow(tr('الموقع «طوال الوقت»', 'Location “all the time”'), tr('لإنذارات منطقتك والهاتف مقفل', 'For your area’s alarms while the phone is locked'), 'loc', _fixLocation),
+            _permRow(tr('تجاوز «عدم الإزعاج»', 'Override Do Not Disturb'), tr('يُسمع الإنذار حتى في وضع عدم الإزعاج', 'The alarm sounds even in Do Not Disturb'), 'dnd', () async { await NativeAlarm.openDnd(); }),
+            _permRow(tr('الظهور فوق التطبيقات', 'Display over other apps'), tr('يقطع الإنذار أي تطبيق مفتوح', 'The alarm interrupts any open app'), 'overlay', () async { await NativeAlarm.openOverlay(); }),
+            _permRow(tr('إشعارات ملء الشاشة', 'Full-screen notifications'), tr('يظهر الإنذار فوق قفل الشاشة', 'The alarm shows over the lock screen'), 'fullScreen', () async { await NativeAlarm.openFullScreen(); }),
+            _permRow(tr('دون قيود البطارية', 'No battery limits'), tr('تصل الإنذارات والتطبيق مغلق', 'Alarms arrive while the app is closed'), 'battery', () async { await NativeAlarm.openBattery(); }),
+            _permRow(tr('الميكروفون', 'Microphone'), tr('للمكالمات الصوتية مع ORT', 'For voice calls with ORT'), 'mic', () => _fix(Permission.microphone)),
+            _permRow(tr('الكاميرا', 'Camera'), tr('لتصوير بلاغات 160', 'To photograph 160 reports'), 'cam', () => _fix(Permission.camera)),
+            const SizedBox(height: 4),
+            Align(alignment: AlignmentDirectional.centerStart, child: TextButton.icon(onPressed: _requestAll, icon: const Icon(Icons.refresh), label: Text(tr('مراجعة كل الأذونات', 'Review all permissions')))),
+          ]),
         ),
 
         // password

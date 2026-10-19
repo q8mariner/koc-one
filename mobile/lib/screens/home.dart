@@ -119,13 +119,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         title: const Wordmark(size: 26),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: C.navy),
-            onSelected: (_) => _askPerms(),
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'perm', child: Text(tr('مراجعة الأذونات', 'Review permissions'))),
-            ],
           ),
         ],
       ),

@@ -41,6 +41,11 @@ DATA.losses = [
   { id: "l2", user_id: "p5", lost_at: new Date(Date.now() - 50 * 60000).toISOString(), detected_at: now, reason: "gps_off", last_lat: 29.07, last_lng: 48.08, sector_id: "s1", zone_id: "z1", building_id: null, restored_at: null, status: "logged" },
   { id: "l3", user_id: "p1", lost_at: new Date(Date.now() - 300 * 60000).toISOString(), detected_at: now, reason: "no_signal", sector_id: "s1", zone_id: "z1", building_id: "b1", restored_at: new Date(Date.now() - 280 * 60000).toISOString(), status: "cleared", cleared_by: "me", cleared_at: now, note: "اتصلت به وهو بخير" },
 ];
+DATA.posts = [
+  { id: "po1", kind: "circular", title: "تعميم: تحديث إجراءات تصاريح العمل الساخن", body: "يُعمل بالإجراء المحدّث اعتبارًا من الأول من الشهر القادم.", pinned: true, demo: true, created_at: now },
+  { id: "po2", kind: "event", title: "تمرين إخلاء شامل — المجمع الإداري", body: "تمرين إخلاء مجدول لجميع مباني المجمع.", event_at: now, location: "MP-1 / MP-3", demo: true, created_at: now },
+  { id: "po3", kind: "offer", title: "خصم 20% للموظفين في نادي اللياقة", body: "عند إبراز الهوية الرقمية.", demo: true, created_at: now },
+];
 DATA.reports = [{ id: "r1", type: "fire", user_id: "p1", status: "new", created_at: now, photo_paths: ["x"], lat: 29.07, lng: 48.08 }];
 
 async function run(name, viewport, lang, steps) {
@@ -89,10 +94,11 @@ const steps = [
   ["8-people", S(`s.tab='people'; s.psel=['p3'];`)],
   ["9-reports", S(`s.tab='reports';`)],
   ["10-clear", S(`s.tab='alarms'; st.askClear(s.losses[0]);`)],
+  ["11-pm", S(`s.clr=null; s.tab='pm'; st.newPost();`)],
 ];
 await run("phone-ar", { width: 390, height: 844 }, "ar", steps);
 await run("phone-en", { width: 390, height: 844 }, "en", steps.slice(0, 5));
 await run("tablet-ar", { width: 928, height: 1000 }, "ar", [steps[0], steps[2], steps[3]]);
-await run("desktop-ar", { width: 1440, height: 900 }, "ar", [steps[0], steps[1], steps[3], steps[4], steps[6]]);
+await run("desktop-ar", { width: 1440, height: 900 }, "ar", [steps[0], steps[1], steps[3], steps[4], steps[6], steps[10]]);
 fs.writeFileSync(`${out}/report.json`, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.errors, null, 2));

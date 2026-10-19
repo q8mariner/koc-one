@@ -34,8 +34,13 @@ const NAV = [
   { k: "alarms", t: { ar: "الإنذارات", en: "Alarms" }, tag: { ar: "الإنذار والحصر", en: "Alarm & muster" }, h: { ar: "الحوادث ومتابعة الحصر", en: "Incidents and muster" }, i: "M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0" },
   { k: "people", t: { ar: "الموظفون", en: "Employees" }, tag: { ar: "الحسابات والهويات", en: "Accounts & IDs" }, h: { ar: "الموظفون وجهات الاتصال", en: "Employees and contacts" }, i: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7 8v-1a3 3 0 0 0-2-3m-1-9a3 3 0 0 1 0 6" },
   { k: "reports", t: { ar: "بلاغات 160", en: "160 reports" }, tag: { ar: "بلاغات مشفرة", en: "Encrypted reports" }, h: { ar: "بلاغات 160 مع الصور", en: "160 reports with photos" }, i: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" },
+  { k: "pm", t: { ar: "PM", en: "PM" }, tag: { ar: "Postmaster", en: "Postmaster" }, h: { ar: "الأخبار والفعاليات والتعاميم", en: "News, events and circulars" }, i: "M4 6h16v12H4zM4 7l8 6 8-6" },
   { k: "keys", t: { ar: "التشفير", en: "Encryption" }, tag: { ar: "الأمان", en: "Security" }, h: { ar: "مفتاح تشفير البلاغات", en: "Report encryption key" }, i: "M8 15a4 4 0 1 1 3-6.6L21 8v4h-2v2h-2v2h-3l-2.5-2.4A4 4 0 0 1 8 15zm-1-4h.01" },
 ];
+const POST_KINDS = {
+  news: { ar: "خبر", en: "News", c: "#2B4C9B" }, event: { ar: "فعالية", en: "Event", c: "#0E7490" }, circular: { ar: "تعميم", en: "Circular", c: "#B45309" },
+  offer: { ar: "عرض", en: "Offer", c: "#2E9E5B" }, announcement: { ar: "إعلان", en: "Announcement", c: "#6D28D9" },
+};
 const ITEM_TYPES = { sector: { ar: "قطاع", en: "sector" }, zone: { ar: "Zone", en: "zone" }, building: { ar: "مبنى", en: "building" } };
 const CLASSES = { unclassified: { ar: "غير مصنفة", en: "Unclassified" }, zone2: { ar: "Zone 2", en: "Zone 2" }, zone1: { ar: "Zone 1", en: "Zone 1" }, zone0: { ar: "Zone 0", en: "Zone 0" } };
 const REPORT_TYPES = { fire: { ar: "حريق", en: "Fire" }, leak: { ar: "تسرب غاز/نفط", en: "Gas/oil leak" }, injury: { ar: "إصابة", en: "Injury" },
@@ -78,6 +83,8 @@ createApp({
       call: null, callState: "", muted: false,
       // location-signal losses
       losses: [], clr: null, lossFilter: "all",
+      // PM posts
+      posts: [], postForm: null, postKind: "all",
     });
 
     let map, layers, peopleLayer, drawLayer, caller;
@@ -121,7 +128,7 @@ createApp({
     }
 
     async function loadAll() {
-      const [a, b, c, d, e, f, g, k, sl] = await Promise.all([
+      const [a, b, c, d, e, f, g, k, sl, po] = await Promise.all([
         sb.from("sectors").select("*").order("created_at"),
         sb.from("zones").select("*").order("created_at"),
         sb.from("buildings").select("*").order("created_at"),
@@ -131,10 +138,11 @@ createApp({
         sb.from("reports").select("*").order("created_at", { ascending: false }).limit(200),
         sb.from("org_private_key").select("*").maybeSingle(),
         sb.from("signal_losses").select("*").order("detected_at", { ascending: false }).limit(300),
+        sb.from("posts").select("*").order("pinned", { ascending: false }).order("created_at", { ascending: false }).limit(200),
       ]);
       s.sectors = a.data || []; s.zones = b.data || []; s.buildings = c.data || []; s.people = d.data || [];
       s.alarms = e.data || []; s.acks = f.data || []; s.reports = g.data || [];
-      s.keyRow = k.data; s.hasKey = !!k.data; s.losses = sl.data || [];
+      s.keyRow = k.data; s.hasKey = !!k.data; s.losses = sl.data || []; s.posts = po.data || [];
       if (!s.selInc) { const act = incidents.value.find((x) => x.active); if (act) s.selInc = act.key; }
       loadAvatars();
     }
@@ -306,30 +314,44 @@ createApp({
     let lossMarkers = {};
 
     const STATUS_COLOR = { safe: "#2E9E5B", received: "#E5B80B", none: "#E5B80B", need_help: "#E07B29", injured: "#C62828", trapped: "#C62828" };
+    // Markers are kept and moved in place (live updates every few seconds), so an open popup stays open.
+    let pMarkers = {};
+    function putMarker(key, make, latlng, html, style) {
+      let m = pMarkers[key];
+      if (!m) { m = make().bindPopup(html).addTo(peopleLayer); pMarkers[key] = m; }
+      else { m.setLatLng(latlng); if (style && m.setStyle) m.setStyle(style); m.setPopupContent(html); }
+      return m;
+    }
     function drawPeople() {
-      if (!peopleLayer) return; peopleLayer.clearLayers(); lossMarkers = {};
+      if (!peopleLayer) return;
+      const seen = new Set(); lossMarkers = {};
       staff.value.forEach((p) => {
         const ol = openLossOf(p.id);
-        if (ol) return drawLoss(p, ol);
+        if (ol) { const m = drawLoss(p, ol); if (m) { seen.add("l" + ol.id); lossMarkers[ol.id] = m; } return; }
         if (!p.last_lat || hiddenLossOf(p.id)) return; // signal lost in normal times → off the map, in the log
+        // left every boundary → stays on the map for one minute, then disappears
+        const inside = p.cur_sector_id || p.cur_zone_id || p.cur_building_id;
+        if (!inside && (!p.last_seen || Date.now() - new Date(p.last_seen) > 60000)) return;
         const st = personStatus(p.id);
-        L.circleMarker([p.last_lat, p.last_lng], { radius: 7, color: "#ffffff", weight: 2, fillColor: STATUS_COLOR[st] || (p.online ? "#2B4C9B" : "#94A3B8"), fillOpacity: 1 })
-          .bindPopup(`<b>${esc(p.full_name)}</b><br>${esc(p.employee_no || "")} · ${tr("فصيلة", "Blood")} ${esc(p.blood_type || "—")}<br>${esc(name("building", p.cur_building_id))} · ${tr("آخر ظهور", "last seen")} ${ago(p.last_seen)}<br>
-            ${st ? tr("الحالة: ", "Status: ") + lt(STATUS[st][0]) + "<br>" : ""}<button class="mini" onclick="window.__kocCall('${p.id}')">${tr("اتصال صوتي", "Voice call")}</button>`)
-          .addTo(peopleLayer);
+        const style = { radius: 7, color: "#ffffff", weight: 2, fillColor: STATUS_COLOR[st] || (p.online ? "#2B4C9B" : "#94A3B8"), fillOpacity: 1 };
+        const html = `<b>${esc(p.full_name)}</b><br>${esc(p.employee_no || "")} · ${tr("فصيلة", "Blood")} ${esc(p.blood_type || "—")}<br>${inside ? esc(name("building", p.cur_building_id)) : tr("غادر الحدود", "Left the boundaries")} · ${tr("آخر ظهور", "last seen")} ${ago(p.last_seen)}<br>
+            ${st ? tr("الحالة: ", "Status: ") + lt(STATUS[st][0]) + "<br>" : ""}<button class="mini" onclick="window.__kocCall('${p.id}')">${tr("اتصال صوتي", "Voice call")}</button>`;
+        const ll = [p.last_lat, p.last_lng];
+        putMarker("p" + p.id, () => L.circleMarker(ll, style), ll, html, style);
+        seen.add("p" + p.id);
       });
+      for (const k of Object.keys(pMarkers)) if (!seen.has(k)) { peopleLayer.removeLayer(pMarkers[k]); delete pMarkers[k]; }
     }
     function drawLoss(p, l) {
       const pt = !l.restored_at ? [l.last_lat ?? p.last_lat, l.last_lng ?? p.last_lng] : [p.last_lat, p.last_lng];
-      if (pt[0] == null) return;
+      if (pt[0] == null) return null;
       const icon = L.divIcon({ className: "", html: '<span class="lossmk"><i></i><b>!</b></span>', iconSize: [34, 34], iconAnchor: [17, 17] });
       const back = l.restored_at ? `<br><span style="color:#1F7A45">${tr("عادت الإشارة ", "Signal back ")}${esc(fmt(l.restored_at))}</span>` : "";
-      lossMarkers[l.id] = L.marker(pt, { icon, zIndexOffset: 1000 })
-        .bindPopup(`<b>${esc(p.full_name)}</b> · ${esc(p.employee_no || "")}<br><b style="color:#A11F1F">${tr("انقطاع إشارة الموقع", "Location signal lost")}</b> · ${esc(lossReason(l))}<br>
+      const html = `<b>${esc(p.full_name)}</b> · ${esc(p.employee_no || "")}<br><b style="color:#A11F1F">${tr("انقطاع إشارة الموقع", "Location signal lost")}</b> · ${esc(lossReason(l))}<br>
           ${tr("منذ ", "Since ")}${esc(fmt(l.lost_at))} (${esc(dur(l.lost_at, l.restored_at))})${back}<br>${esc(lossArea(l))}${lossAlarm(l) ? "<br>" + esc(lossAlarm(l)) : ""}<br>
           <button class="mini" onclick="window.__kocCall('${p.id}')">${tr("اتصال صوتي", "Voice call")}</button>
-          <button class="mini" style="background:#2E9E5B" onclick="window.__kocClearLoss('${l.id}')">${tr("تأكيد السلامة", "Confirm safe")}</button>`)
-        .addTo(peopleLayer);
+          <button class="mini" style="background:#2E9E5B" onclick="window.__kocClearLoss('${l.id}')">${tr("تأكيد السلامة", "Confirm safe")}</button>`;
+      return putMarker("l" + l.id, () => L.marker(pt, { icon, zIndexOffset: 1000 }), pt, html);
     }
     function fitAll() {
       if (!map) return;
@@ -616,6 +638,30 @@ createApp({
     }
     async function setReportStatus(r, st) { const { error } = await sb.from("reports").update({ status: st }).eq("id", r.id); if (!error) r.status = st; }
 
+    // ───── PM posts ─────
+    const postsShown = computed(() => (s.postKind === "all" ? s.posts : s.posts.filter((p) => p.kind === s.postKind)));
+    function toLocalInput(iso) { if (!iso) return ""; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+    function newPost() { s.postForm = { id: null, kind: "news", title: "", title_en: "", body: "", body_en: "", event_at: "", location: "", pinned: false }; nextTick(() => document.getElementById("post-form")?.scrollIntoView({ behavior: "smooth", block: "start" })); }
+    function editPost(p) { s.postForm = { ...p, title_en: p.title_en || "", body_en: p.body_en || "", location: p.location || "", event_at: toLocalInput(p.event_at) }; nextTick(() => document.getElementById("post-form")?.scrollIntoView({ behavior: "smooth", block: "start" })); }
+    async function savePost() {
+      const f = s.postForm; if (!f.title.trim() || !f.body.trim()) return toast(tr("العنوان والنص بالعربية مطلوبان", "The Arabic title and text are required"));
+      const row = { kind: f.kind, title: f.title.trim(), title_en: f.title_en.trim() || null, body: f.body.trim(), body_en: f.body_en.trim() || null,
+        event_at: f.kind === "event" && f.event_at ? new Date(f.event_at).toISOString() : null, location: f.kind === "event" ? (f.location.trim() || null) : null, pinned: !!f.pinned };
+      const q = f.id ? sb.from("posts").update(row).eq("id", f.id).select().single() : sb.from("posts").insert({ ...row, created_by: s.me.id }).select().single();
+      const { data, error } = await q;
+      if (error) return toast(tr("تعذّر الحفظ: ", "Couldn’t save: ") + error.message);
+      upsertLocal(s.posts, data); s.postForm = null;
+      toast(f.id ? tr("حُدّث المنشور", "Post updated") : tr("نُشر — يظهر الآن في قسم PM في التطبيق", "Published — it now shows in the app’s PM tab"));
+    }
+    async function deletePost(p) {
+      if (!confirm(tr("حذف هذا المنشور من التطبيق؟", "Delete this post from the app?"))) return;
+      const { error } = await sb.from("posts").delete().eq("id", p.id);
+      if (error) return toast(tr("تعذّر الحذف: ", "Couldn’t delete: ") + error.message);
+      s.posts = s.posts.filter((x) => x.id !== p.id);
+    }
+    const ptitle = (p) => (s.lang === "en" && p.title_en ? p.title_en : p.title);
+    const pbody = (p) => (s.lang === "en" && p.body_en ? p.body_en : p.body);
+
     // ───── KPIs ─────
     const kpi = computed(() => ({
       online: staff.value.filter((p) => p.online).length,
@@ -632,6 +678,7 @@ createApp({
       applyLang();
       if (s.session) boot();
       setInterval(() => { s._tick = Date.now(); }, 30000);
+      setInterval(() => { if (s.session && map) drawPeople(); }, 10000); // expire people who left a boundary
     });
 
     return {
@@ -650,6 +697,7 @@ createApp({
       callPerson, hangup, toggleMute,
       setupKeys, unlockKey, openReport, setReportStatus,
       // signal losses
+      POST_KINDS, postsShown, newPost, editPost, savePost, deletePost, ptitle, pbody,
       openLossOf, hiddenLossOf, openLosses, lossLog, lossReason, lossArea, lossState, lossAlarm, dur, focusLoss, askClear, saveClear,
     };
   },

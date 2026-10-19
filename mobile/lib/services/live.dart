@@ -1,7 +1,7 @@
 // Live safety service: boundary detection (sector › zone › building), targeted alarms over Supabase
 // Realtime, acknowledgments, and incoming ORT voice calls.
 // Location runs as an Android foreground service (persistent notification) so alarms arrive while the
-// phone is locked. Position is sent to the server only on boundary transitions and during an active alarm.
+// phone is locked. Position is sent live (every ≥5 s) while inside a boundary or during an alarm, and once on leaving; never outside.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -357,8 +357,8 @@ class LiveService extends ChangeNotifier {
     } catch (_) {}
     final settings = AndroidSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 15,
-      intervalDuration: const Duration(seconds: 20),
+      distanceFilter: 5,
+      intervalDuration: const Duration(seconds: 5),
       // no second notification: the ONE background service (type "location") keeps GPS alive in the background
     );
     await NativeAlarm.refreshService();
@@ -408,7 +408,7 @@ class LiveService extends ChangeNotifier {
     if (changed) {
       if (p.accuracy > 100) {
         changed = false; // too vague to decide
-      } else if (p.accuracy > 25 && (_candidate == null || !_same(_candidate!, next))) {
+      } else if (p.accuracy > 35 && (_candidate == null || !_same(_candidate!, next))) {
         _candidate = next; // wait for a second fix that agrees
         changed = false;
       }
@@ -426,8 +426,10 @@ class LiveService extends ChangeNotifier {
       for (final a in List<Map<String, dynamic>>.from(activeAlarms)) {
         _deliverIfApplies(a);
       }
-    } else if (activeAlarms.any((a) => _handled.contains(a['id']))) {
-      _pushPosition(); // live location only during an incident
+    } else if (where.insideAny || activeAlarms.any((a) => _handled.contains(a['id']))) {
+      // live location for ORT while inside a boundary (and during an incident); never outside
+      final now = DateTime.now();
+      if (_lastPush == null || now.difference(_lastPush!).inSeconds >= 5) _pushPosition();
     }
     notifyListeners();
   }
@@ -487,7 +489,10 @@ class LiveService extends ChangeNotifier {
         _ => null,
       };
 
+  DateTime? _lastPush;
+
   Future<void> _pushPosition() async {
+    _lastPush = DateTime.now();
     try {
       await sb.from('profiles').update({
         'cur_sector_id': where.sectorId,

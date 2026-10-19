@@ -290,6 +290,14 @@ button.st { border: 0; cursor: pointer; font: inherit; }
 .sigrow.open { border-color: #F3B4B4; box-shadow: inset 4px 0 0 var(--bad); }
 .sigrow .grow { flex: 1 1 260px; }
 
+/* ── PM posts ── */
+.posts { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.post { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: inset 4px 0 0 var(--pc, var(--navy)); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+[dir=rtl] .post { box-shadow: inset -4px 0 0 var(--pc, var(--navy)); }
+.post h3 { margin: 0; color: var(--fg); font-size: 16px; line-height: 1.4; }
+.post .pk { color: var(--pc, var(--navy)); font-weight: 800; font-size: 13px; }
+.post .pbody { margin: 0; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+
 /* ── tablet ── */
 @media (max-width: 1180px) {
   .areas { grid-template-columns: minmax(0, 1fr) minmax(280px, 42%); }
