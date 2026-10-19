@@ -359,13 +359,9 @@ class LiveService extends ChangeNotifier {
       accuracy: LocationAccuracy.high,
       distanceFilter: 15,
       intervalDuration: const Duration(seconds: 20),
-      foregroundNotificationConfig: ForegroundNotificationConfig(
-        notificationTitle: tr('ONE · الحماية مفعّلة', 'ONE · protection on'),
-        notificationText: tr('يستقبل إنذارات موقعك وتنبيهات الحدود', 'Receiving alarms and boundary alerts for your location'),
-        enableWakeLock: true,
-        notificationIcon: const AndroidResource(name: 'ic_stat_one', defType: 'drawable'),
-      ),
+      // no second notification: the ONE background service (type "location") keeps GPS alive in the background
     );
+    await NativeAlarm.refreshService();
     _posSub = Geolocator.getPositionStream(locationSettings: settings).listen(_onPosition, onError: (_) {
       gpsState = tr('تعذّر قراءة الموقع', 'Couldn’t read location');
       notifyListeners();

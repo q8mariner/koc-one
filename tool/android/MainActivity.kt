@@ -81,6 +81,11 @@ class MainActivity : FlutterFragmentActivity() {
                         AlarmWatchService.start(this)
                         result.success(null)
                     }
+                    "refreshService" -> {
+                        // e.g. location permission just granted → the service adds its location type
+                        if (getSharedPreferences(AlarmWatchService.PREFS, Context.MODE_PRIVATE).getString("token", null) != null) AlarmWatchService.start(this)
+                        result.success(null)
+                    }
                     "unregisterDevice" -> {
                         getSharedPreferences(AlarmWatchService.PREFS, Context.MODE_PRIVATE).edit().clear().apply()
                         AlarmWatchService.stop(this)

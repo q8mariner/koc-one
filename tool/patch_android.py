@@ -28,7 +28,7 @@ if "showWhenLocked" not in m:
 # background alarm service (works while the app is closed) + restart after reboot / update
 if "AlarmWatchService" not in m:
     comps = """
-        <service android:name=".AlarmWatchService" android:exported="false" android:foregroundServiceType="specialUse">
+        <service android:name=".AlarmWatchService" android:exported="false" android:foregroundServiceType="specialUse|location">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Emergency alarm delivery for employee safety"/>
         </service>
         <receiver android:name=".BootReceiver" android:exported="true">

@@ -94,21 +94,50 @@ class AlarmWatchService : Service() {
     private fun builder(channel: String): Notification.Builder =
         if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channel) else Notification.Builder(this)
 
+    private var fgTypes = -1 // service types currently in force; -1 = not foreground yet
+
+    private fun hasLocation(): Boolean = Build.VERSION.SDK_INT < 23 ||
+        checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+        checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /**
+     * The one ONE notification Android requires for background work. It also covers location
+     * (type "location"), so the app's GPS keeps working in the background without a second
+     * notification. Posted once; reopening the app doesn't post it again unless the type changes.
+     */
     private fun goForeground() {
+        val types = if (Build.VERSION.SDK_INT >= 34) {
+            if (hasLocation()) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            else ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else 0
+        if (types == fgTypes) return
         if (Build.VERSION.SDK_INT >= 26 && nm().getNotificationChannel("one_watch") == null) {
-            nm().createNotificationChannel(NotificationChannel("one_watch", "ONE · protection · الحماية", NotificationManager.IMPORTANCE_MIN))
+            val ch = NotificationChannel("one_watch", "ONE · protection · الحماية", NotificationManager.IMPORTANCE_MIN)
+            ch.setShowBadge(false)
+            ch.setSound(null, null)
+            ch.enableVibration(false)
+            nm().createNotificationChannel(ch)
         }
         val n = builder("one_watch")
             .setSmallIcon(statIcon())
             .setContentTitle(tr("ONE · الحماية مفعّلة", "ONE · protection on"))
-            .setContentText(tr("تصلك الإنذارات حتى والتطبيق مغلق", "Alarms reach you even when the app is closed"))
+            .setContentText(tr("تصلك الإنذارات وتنبيهات الحدود حتى والتطبيق مغلق", "Alarms and boundary alerts reach you even when the app is closed"))
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
             .setContentIntent(openAppIntent(null))
             .build()
         try {
-            if (Build.VERSION.SDK_INT >= 34) startForeground(FG_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            if (Build.VERSION.SDK_INT >= 34) startForeground(FG_ID, n, types)
             else startForeground(FG_ID, n)
-        } catch (_: Exception) {}
+            fgTypes = types
+        } catch (_: Exception) {
+            // location type refused (e.g. started at boot without background location) → alarms only
+            try {
+                if (Build.VERSION.SDK_INT >= 34) startForeground(FG_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(FG_ID, n)
+                fgTypes = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            } catch (_: Exception) {}
+        }
     }
 
     private fun rpc(base: String, key: String, fn: String, body: JSONObject): String? {

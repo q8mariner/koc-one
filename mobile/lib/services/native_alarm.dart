@@ -39,6 +39,7 @@ class NativeAlarm {
   static Future<void> registerDevice(String token) =>
       _call('registerDevice', {'token': token, 'url': supabaseUrl, 'key': supabaseKey});
   static Future<void> unregisterDevice() => _call('unregisterDevice');
+  static Future<void> refreshService() => _call('refreshService');
   static Future<void> stop() => _call('stop');
   static Future<void> bringToFront() => _call('bringToFront');
 
