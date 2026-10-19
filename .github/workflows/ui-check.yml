@@ -6,6 +6,9 @@ on:
     types: [completed]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   screenshots:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
@@ -24,8 +27,11 @@ jobs:
         run: sleep 30
       - name: Screenshots and error check
         run: node tool/ui_check.mjs "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" ui-shots
-      - uses: actions/upload-artifact@v4
+      - name: Publish screenshots to the ui-shots branch
         if: always()
-        with:
-          name: ui-shots
-          path: ui-shots
+        run: |
+          cd ui-shots
+          git init -q -b ui-shots
+          git config user.name "ui-check"; git config user.email "ui-check@users.noreply.github.com"
+          git add -A && git commit -qm "UI screenshots ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ui-shots

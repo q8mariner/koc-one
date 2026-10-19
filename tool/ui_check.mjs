@@ -39,7 +39,7 @@ DATA.acks = [{ alarm_id: "a1", user_id: "p0", status: "safe", updated_at: now },
 DATA.reports = [{ id: "r1", type: "fire", user_id: "p1", status: "new", created_at: now, photo_paths: ["x"], lat: 29.07, lng: 48.08 }];
 
 async function run(name, viewport, lang, steps) {
-  const ctx = await chromium.launch().then((b) => b.newContext({ viewport, deviceScaleFactor: 2, isMobile: viewport.width < 900, hasTouch: viewport.width < 900 }));
+  const ctx = await chromium.launch().then((b) => b.newContext({ viewport, deviceScaleFactor: 1, isMobile: viewport.width < 900, hasTouch: viewport.width < 900 }));
   const page = await ctx.newPage();
   page.on("pageerror", (e) => report.errors.push(`${name}: pageerror ${e.message}`));
   page.on("console", (m) => { if (m.type() === "error" && !/favicon|ERR_|Failed to load resource/.test(m.text())) report.errors.push(`${name}: console ${m.text()}`); });
