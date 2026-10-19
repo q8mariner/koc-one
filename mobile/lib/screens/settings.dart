@@ -15,7 +15,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _cur = TextEditingController(), _new = TextEditingController(), _new2 = TextEditingController();
-  bool _pwOpen = false, _pwBusy = false, _bioAvail = false, _bioBusy = false;
+  bool _pwOpen = false, _pwBusy = false, _bioAvail = false, _bioBusy = false, _hasSaved = false;
   String? _pwMsg;
   bool _pwOk = false;
 
@@ -23,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     AppLock.I.available().then((v) { if (mounted) setState(() => _bioAvail = v); });
+    AppLock.I.savedEmail().then((e) { if (mounted) setState(() => _hasSaved = e != null); });
   }
 
   @override
@@ -50,6 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     try {
       await sb.auth.updateUser(UserAttributes(password: _new.text));
+      await AppLock.I.passwordChanged(_new.text);
       _cur.clear(); _new.clear(); _new2.clear();
       setState(() { _pwBusy = false; _pwOk = true; _pwOpen = false; _pwMsg = tr('تم تغيير كلمة المرور.', 'Password changed.'); });
     } catch (e) {
@@ -58,12 +60,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _toggleBio(bool on) async {
+    String? password;
+    if (on) {
+      final ctl = TextEditingController();
+      password = await showDialog<String>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text(tr('تفعيل الدخول بالوجه أو البصمة', 'Turn on face / fingerprint sign-in')),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(tr('أدخل كلمة المرور مرة واحدة. تُحفظ مشفّرة على هذا الهاتف ولا تُستخدم إلا بعد التحقق من وجهك أو بصمتك.', 'Enter your password once. It is stored encrypted on this phone and used only after your face / fingerprint is verified.'), style: const TextStyle(color: C.muted)),
+            const SizedBox(height: 12),
+            TextField(controller: ctl, obscureText: true, autofocus: true, textDirection: TextDirection.ltr, decoration: InputDecoration(labelText: tr('كلمة المرور', 'Password'), border: const OutlineInputBorder())),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: Text(tr('إلغاء', 'Cancel'))),
+            FilledButton(onPressed: () => Navigator.pop(c, ctl.text), child: Text(tr('متابعة', 'Continue'))),
+          ],
+        ),
+      );
+      if (password == null) return;
+    }
     setState(() => _bioBusy = true);
-    final ok = await AppLock.I.setEnabled(on);
+    final err = await AppLock.I.setEnabled(on, password: password);
     if (!mounted) return;
     setState(() => _bioBusy = false);
-    if (!ok) _snack(tr('لم يتم التحقق — لم يُفعَّل القفل.', 'Not verified — the lock wasn’t turned on.'));
-    else _snack(on ? tr('سيطلب التطبيق الوجه أو البصمة عند فتحه.', 'The app will ask for your face or fingerprint when opened.') : tr('أُلغي قفل الوجه والبصمة.', 'Face / fingerprint lock turned off.'));
+    if (err == null) _hasSaved = on;
+    if (err != null) _snack(err);
+    else _snack(on ? tr('فُعّل: ادخل بالوجه أو البصمة من صفحة تسجيل الدخول، ويُطلب أيضًا عند فتح التطبيق.', 'On: sign in with face / fingerprint from the login screen; it is also asked when the app opens.') : tr('أُلغي الدخول بالوجه والبصمة.', 'Face / fingerprint sign-in turned off.'));
   }
 
   Future<void> _signOut() async {
@@ -139,12 +162,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         OneCard(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: SwitchListTile(
-            value: AppLock.I.enabled,
+            value: AppLock.I.enabled && _hasSaved, // turned on before the login button existed → turn on again
             onChanged: (!_bioAvail || _bioBusy) ? null : _toggleBio,
             secondary: const Icon(Icons.face_retouching_natural, color: C.navy),
-            title: Text(tr('فتح التطبيق بالوجه أو البصمة', 'Unlock the app with face or fingerprint'), style: const TextStyle(fontWeight: FontWeight.w700)),
+            title: Text(tr('الدخول بالوجه أو البصمة', 'Sign in with face or fingerprint'), style: const TextStyle(fontWeight: FontWeight.w700)),
             subtitle: Text(_bioAvail
-                ? tr('يُطلب عند فتح التطبيق وبعد دقيقة في الخلفية. الإنذارات والمكالمات تظهر دائمًا دون قفل.', 'Asked when the app opens and after a minute in the background. Alarms and calls always show without the lock.')
+                ? tr('زر الدخول بالوجه أو البصمة في صفحة تسجيل الدخول، ويُطلب أيضًا عند فتح التطبيق وبعد دقيقة في الخلفية. الإنذارات والمكالمات تظهر دائمًا دون قفل.', 'A face / fingerprint button on the login screen; also asked when the app opens and after a minute in the background. Alarms and calls always show without the lock.')
                 : tr('هذا الهاتف لا يدعم الوجه أو البصمة، أو لم تُسجَّل بصمة/وجه في إعدادات الهاتف.', 'This phone has no face / fingerprint set up.')),
           ),
         ),

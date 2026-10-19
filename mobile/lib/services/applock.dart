@@ -1,7 +1,10 @@
 // Face / fingerprint lock. When enabled, the app asks for the phone's biometrics (or its screen PIN)
 // on opening and after 60 s in the background. Alarms and ORT calls always open on top of the lock.
+// It also signs in from the login screen: the email + password are kept encrypted on the phone
+// (Android Keystore) and are released only after a face / fingerprint check.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,6 +18,8 @@ class AppLock extends ValueNotifier<bool> with WidgetsBindingObserver {
   }
 
   final _auth = LocalAuthentication();
+  final _vault = const FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences: true));
+  static const _kEmail = 'one.bio.email', _kPass = 'one.bio.pass', _kUid = 'one.bio.uid';
   bool enabled = false;
   bool _busy = false;
   DateTime? _pausedAt;
@@ -70,14 +75,95 @@ class AppLock extends ValueNotifier<bool> with WidgetsBindingObserver {
     return ok;
   }
 
-  Future<bool> setEnabled(bool on) async {
-    if (on && !await authenticate()) return false; // prove it works before turning it on
+  // ── saved sign-in for the login screen ──
+  Future<String?> savedEmail() async {
+    try {
+      return await _vault.read(key: _kEmail);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _saveLogin(String email, String password) async {
+    final uid = _uid;
+    await _vault.write(key: _kEmail, value: email);
+    await _vault.write(key: _kPass, value: password);
+    if (uid != null) await _vault.write(key: _kUid, value: uid);
+  }
+
+  Future<void> _clearLogin() async {
+    try {
+      await _vault.delete(key: _kEmail);
+      await _vault.delete(key: _kPass);
+      await _vault.delete(key: _kUid);
+    } catch (_) {}
+  }
+
+  /// Login screen: face / fingerprint → saved email + password → sign in. Returns an error text or null.
+  Future<String?> signInWithBiometrics() async {
+    if (!await authenticate()) return tr('لم يتم التحقق من الوجه أو البصمة.', 'Face / fingerprint not verified.');
+    final email = await _vault.read(key: _kEmail), pass = await _vault.read(key: _kPass);
+    if (email == null || pass == null) return tr('لا يوجد دخول محفوظ. ادخل بكلمة المرور.', 'No saved sign-in. Use your password.');
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(email: email, password: pass);
+      return null;
+    } on AuthException {
+      await _clearLogin(); // password changed elsewhere
+      return tr('تغيّرت كلمة المرور. ادخل بكلمة المرور الجديدة ثم فعّل البصمة من جديد.', 'The password changed. Sign in with the new password, then turn the fingerprint on again.');
+    } catch (_) {
+      return tr('لا يوجد اتصال بالشبكة.', 'No network connection.');
+    }
+  }
+
+  /// After a password sign-in: if this account uses face / fingerprint, refresh the saved password.
+  Future<void> afterPasswordLogin(String email, String password) async {
+    final uid = _uid;
+    if (uid == null) return;
+    var on = false;
+    try {
+      on = (await SharedPreferences.getInstance()).getBool('one.biolock.$uid') ?? false;
+    } catch (_) {}
+    if (on) {
+      try { await _saveLogin(email, password); } catch (_) {}
+    }
+  }
+
+  /// Turn on: confirm the password (it is saved for the login screen) and a face / fingerprint check.
+  /// Returns an error text, or null on success.
+  Future<String?> setEnabled(bool on, {String? password}) async {
+    if (on) {
+      final email = Supabase.instance.client.auth.currentUser?.email;
+      if (email == null || password == null || password.isEmpty) return tr('أدخل كلمة المرور.', 'Enter your password.');
+      try {
+        await Supabase.instance.client.auth.signInWithPassword(email: email, password: password);
+      } on AuthException {
+        return tr('كلمة المرور غير صحيحة.', 'Wrong password.');
+      } catch (_) {
+        return tr('لا يوجد اتصال بالشبكة.', 'No network connection.');
+      }
+      if (!await authenticate()) return tr('لم يتم التحقق من الوجه أو البصمة — لم يُفعَّل.', 'Face / fingerprint not verified — not turned on.');
+      try {
+        await _saveLogin(email, password);
+      } catch (_) {
+        return tr('تعذّر الحفظ الآمن على هذا الهاتف.', 'Couldn’t store it securely on this phone.');
+      }
+    } else {
+      await _clearLogin();
+    }
     enabled = on;
     try {
       await (await SharedPreferences.getInstance()).setBool(_key, on);
     } catch (_) {}
     if (!on) value = false;
-    return true;
+    return null;
+  }
+
+  /// Saved password needs replacing after a password change in Settings.
+  Future<void> passwordChanged(String password) async {
+    final email = Supabase.instance.client.auth.currentUser?.email;
+    if (enabled && email != null) {
+      try { await _saveLogin(email, password); } catch (_) {}
+    }
   }
 
   void reset() {
