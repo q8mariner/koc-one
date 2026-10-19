@@ -40,19 +40,26 @@ jobs:
       - name: Build release APK
         working-directory: mobile
         run: |
-          flutter build apk --release
-          cp build/app/outputs/flutter-apk/app-release.apk ../KOC-ONE.apk
+          # one APK per processor type instead of one APK carrying all three (same code, same features)
+          flutter build apk --release --split-per-abi --split-debug-info=build/symbols
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../KOC-ONE.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk ../KOC-ONE-32bit.apk
+          ls -l ../KOC-ONE*.apk
+          echo "### APK sizes" >> $GITHUB_STEP_SUMMARY
+          ls -l ../KOC-ONE*.apk | awk '{printf "- %s: %.1f MB\n", $9, $5/1048576}' >> $GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         with:
           name: KOC-ONE-apk
-          path: KOC-ONE.apk
+          path: KOC-ONE*.apk
       - name: Publish to Releases (latest)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: KOC ONE · Android
-          body: "آخر نسخة من تطبيق الموظف KOC ONE — حمّل الملف KOC-ONE.apk وثبّته على جهاز Android 7 أو أحدث."
-          files: KOC-ONE.apk
+          body: "آخر نسخة من تطبيق الموظف ONE — حمّل KOC-ONE.apk (لكل الهواتف الحديثة) وثبّته على Android 7 أو أحدث. للهواتف القديمة جدًا (32-bit) فقط: KOC-ONE-32bit.apk"
+          files: |
+            KOC-ONE.apk
+            KOC-ONE-32bit.apk
           make_latest: true
 
   dashboard:
