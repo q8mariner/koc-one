@@ -119,8 +119,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         title: const Wordmark(size: 26),
-          ),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async => _checkPerms(),

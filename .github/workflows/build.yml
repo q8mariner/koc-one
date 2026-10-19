@@ -41,7 +41,9 @@ jobs:
         working-directory: mobile
         run: |
           # one APK per processor type instead of one APK carrying all three (same code, same features)
-          flutter build apk --release --split-per-abi --split-debug-info=build/symbols
+          set -o pipefail
+          flutter build apk --release --split-per-abi --split-debug-info=build/symbols 2>&1 | tee build.log || {
+            grep -E "error|Error:" build.log | head -20 | while read -r l; do echo "::error::$l"; done; exit 1; }
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../KOC-ONE.apk
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk ../KOC-ONE-32bit.apk
           ls -l ../KOC-ONE*.apk
