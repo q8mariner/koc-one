@@ -86,6 +86,7 @@ const steps = [
 ];
 await run("phone-ar", { width: 390, height: 844 }, "ar", steps);
 await run("phone-en", { width: 390, height: 844 }, "en", steps.slice(0, 5));
+await run("tablet-ar", { width: 928, height: 1000 }, "ar", [steps[0], steps[2], steps[3]]);
 await run("desktop-ar", { width: 1440, height: 900 }, "ar", [steps[0], steps[1], steps[3], steps[4], steps[6]]);
 fs.writeFileSync(`${out}/report.json`, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.errors, null, 2));

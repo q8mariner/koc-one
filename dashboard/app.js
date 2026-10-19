@@ -239,6 +239,7 @@ createApp({
       map = L.map("map", { zoomControl: true, attributionControl: true }).setView(C.MAP_CENTER, 12);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
       layers = L.layerGroup().addTo(map); peopleLayer = L.layerGroup().addTo(map); drawLayer = L.layerGroup().addTo(map);
+      try { new ResizeObserver(() => map && map.invalidateSize()).observe(document.getElementById("map")); } catch (_) {}
       applyLang();
       map.on("pm:create", (e) => {
         const pts = e.layer.getLatLngs()[0].map((p) => [+p.lat.toFixed(6), +p.lng.toFixed(6)]);
@@ -312,7 +313,7 @@ createApp({
       nextTick(() => {
         map.invalidateSize();
         map.pm.enableDraw("Polygon", { snappable: true, templineStyle: { color: "#E5B80B" }, pathOptions: { color: "#E5B80B" } });
-        const m = document.getElementById("map"); if (m && window.innerWidth < 900) m.scrollIntoView({ behavior: "smooth", block: "center" });
+        const m = document.getElementById("map"); if (m && window.innerWidth < 640) m.scrollIntoView({ behavior: "smooth", block: "center" });
       });
     }
     function cancelDraw() { s.drawing = false; map && map.pm.disableDraw(); }

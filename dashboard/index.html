@@ -57,10 +57,8 @@
 
     <div class="main">
       <header class="top">
-        <img class="mob-logo" src="favicon-192.png" alt="" width="36" height="36">
         <div class="titles">
-          <span class="tag">{{ L(curNav.tag) }}</span>
-          <h1>{{ L(curNav.h) }}</h1>
+          <h1 class="tag ptitle">{{ L(curNav.h) }}</h1>
         </div>
         <div class="who">
           <span class="live"><i></i>{{ tr('مباشر', 'Live') }}</span>
@@ -79,18 +77,18 @@
 
       <!-- ═════ AREAS: sectors → zones → buildings → employees ═════ -->
       <section class="page areas" v-show="s.tab==='areas'">
-        <div class="area-col">
-          <nav class="crumbs" :aria-label="tr('المسار', 'Path')">
-            <button :class="{on: level==='sectors'}" @click="goLevel('sectors')">{{ tr('جميع القطاعات', 'All sectors') }}</button>
-            <template v-if="s.path.sector"><i>›</i><button :class="{on: level==='zones'}" @click="goLevel('zones')">{{ name('sector', s.path.sector) }}</button></template>
-            <template v-if="s.path.zone"><i>›</i><button :class="{on: level==='buildings'}" @click="goLevel('buildings')">{{ name('zone', s.path.zone) }}</button></template>
-            <template v-if="s.path.building"><i>›</i><button class="on">{{ s.path.building===NO_BUILDING ? tr('خارج المباني', 'Outside buildings') : name('building', s.path.building) }}</button></template>
-          </nav>
+        <nav class="crumbs" :aria-label="tr('المسار', 'Path')">
+          <button :class="{on: level==='sectors'}" @click="goLevel('sectors')">{{ tr('جميع القطاعات', 'All sectors') }}</button>
+          <template v-if="s.path.sector"><i>›</i><button :class="{on: level==='zones'}" @click="goLevel('zones')">{{ name('sector', s.path.sector) }}</button></template>
+          <template v-if="s.path.zone"><i>›</i><button :class="{on: level==='buildings'}" @click="goLevel('buildings')">{{ name('zone', s.path.zone) }}</button></template>
+          <template v-if="s.path.building"><i>›</i><button class="on">{{ s.path.building===NO_BUILDING ? tr('خارج المباني', 'Outside buildings') : name('building', s.path.building) }}</button></template>
+        </nav>
 
-          <div class="level-head">
-            <h2 class="sec">{{ levelTitle }}</h2>
-            <button v-if="level!=='people'" class="btn sm primary" @click="newItemHere">+ {{ addLabel }}</button>
-          </div>
+        <div class="level-head areas-head">
+          <h2 class="sec">{{ levelTitle }}</h2>
+          <button v-if="level!=='people'" class="btn sm primary" @click="newItemHere">+ {{ addLabel }}</button>
+        </div>
+        <div class="area-col">
 
           <!-- boundary editor -->
           <div v-if="s.edit" id="editor" class="editor">
