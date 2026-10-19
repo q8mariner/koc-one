@@ -46,7 +46,7 @@
   <div v-else-if="s.me" class="shell" :class="'tab-' + s.tab">
     <!-- desktop side rail -->
     <nav class="rail" :aria-label="tr('الأقسام', 'Sections')">
-      <div class="rail-mark"><img src="favicon-192.png" alt="" width="44" height="44"><span><b>/</b>ONE</span></div>
+      <div class="rail-mark"><img src="favicon-192.png" alt="ONE" width="48" height="48"></div>
       <button v-for="n in NAV" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k" :title="L(n.t)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="n.i"/></svg><span>{{ L(n.t) }}</span>
         <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && kpi.active" class="red">{{ kpi.active }}</em>
@@ -142,9 +142,9 @@
               </div>
               <div class="box-count"><b>{{ x.count }}</b><span>{{ tr('موظف داخله', x.count===1 ? 'person inside' : 'people inside') }}</span></div>
               <div v-if="boxStatus(x.field, x.item.id)" class="box-st">
-                <span class="ok">✓ {{ boxStatus(x.field, x.item.id).safe }}</span>
-                <span class="bad" v-if="boxStatus(x.field, x.item.id).help">! {{ boxStatus(x.field, x.item.id).help }}</span>
-                <span class="wait" v-if="boxStatus(x.field, x.item.id).wait">… {{ boxStatus(x.field, x.item.id).wait }}</span>
+                <span class="ok">{{ boxStatus(x.field, x.item.id).safe }} {{ tr('آمن', 'safe') }}</span>
+                <span class="bad" v-if="boxStatus(x.field, x.item.id).help">{{ boxStatus(x.field, x.item.id).help }} {{ tr('بحاجة مساعدة', 'need help') }}</span>
+                <span class="wait" v-if="boxStatus(x.field, x.item.id).wait">{{ boxStatus(x.field, x.item.id).wait }} {{ tr('بدون رد', 'no reply') }}</span>
               </div>
             </div>
             <div v-if="level==='buildings' && noBuildingCount" class="box ghostbox" role="button" tabindex="0" @click="openNoBuilding" @keydown.enter="openNoBuilding">

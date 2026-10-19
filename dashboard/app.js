@@ -180,7 +180,7 @@ createApp({
       people: tr("إنذار لكل من في المبنى", "Alarm everyone here"),
     }[level.value]));
     function childInfo(x) {
-      if (level.value === "sectors") { const n = zonesOf(x.id).length; return n + " Zone"; }
+      if (level.value === "sectors") { const n = zonesOf(x.id).length; return tr(`${n} زون`, `${n} ${n === 1 ? "zone" : "zones"}`); }
       if (level.value === "zones") { const n = buildingsOf(x.id).length; return n + tr(" مبنى", n === 1 ? " building" : " buildings"); }
       if (level.value === "buildings") return x.muster_point ? tr("تجمع: ", "Muster: ") + x.muster_point : "";
       return "";
