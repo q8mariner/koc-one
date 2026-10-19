@@ -343,3 +343,101 @@ $$;
 -- One incident can target several sectors / zones / buildings / employees: one alarm row per target, same batch_id.
 alter table public.alarms add column if not exists batch_id uuid;
 create index if not exists alarms_batch_idx on public.alarms(batch_id);
+-- ── Location-signal watch ──
+-- Heartbeat: the app (every 60 s) and the background service (every 60 s, also when the app is closed)
+-- report that the phone is alive and whether GPS is on. signal_at = last heartbeat with GPS on.
+alter table public.profiles
+  add column if not exists last_ping timestamptz,
+  add column if not exists signal_at timestamptz,
+  add column if not exists gps_on boolean;
+
+create table if not exists public.signal_losses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  lost_at timestamptz not null,               -- last good signal
+  detected_at timestamptz not null default now(),
+  reason text not null default 'no_signal' check (reason in ('no_signal', 'gps_off')),
+  last_lat double precision, last_lng double precision,
+  sector_id uuid, zone_id uuid, building_id uuid,
+  restored_at timestamptz,
+  -- logged = normal times (hidden from the map, kept in the log)
+  -- open   = lost within 1 h before, or during, an alarm covering where they were: shown, needs an ORT check
+  -- cleared = closed by ORT after confirming the employee is safe
+  status text not null default 'logged' check (status in ('logged', 'open', 'cleared')),
+  alarm_id uuid references public.alarms(id) on delete set null,
+  escalated_at timestamptz,
+  cleared_by uuid references public.profiles(id) on delete set null,
+  cleared_at timestamptz,
+  note text
+);
+create index if not exists signal_losses_unrestored on public.signal_losses(user_id) where restored_at is null;
+create index if not exists signal_losses_detected on public.signal_losses(detected_at desc);
+alter table public.signal_losses enable row level security;
+drop policy if exists "ort reads signal losses" on public.signal_losses;
+create policy "ort reads signal losses" on public.signal_losses for select using (public.is_ort());
+drop policy if exists "ort clears signal losses" on public.signal_losses;
+create policy "ort clears signal losses" on public.signal_losses for update using (public.is_ort()) with check (public.is_ort());
+alter publication supabase_realtime add table public.signal_losses;
+
+create or replace function public.heartbeat(p_gps boolean) returns void
+language sql security definer set search_path = public as $$
+  update public.profiles set last_ping = now(), gps_on = p_gps, online = true,
+    signal_at = case when p_gps then now() else signal_at end
+  where id = auth.uid();
+$$;
+
+create or replace function public.device_heartbeat(p_token uuid, p_gps boolean) returns void
+language sql security definer set search_path = public as $$
+  update public.profiles p set last_ping = now(), gps_on = p_gps,
+    signal_at = case when p_gps then now() else p.signal_at end
+  from public.device_tokens d where d.token = p_token and d.user_id = p.id and p.online;
+$$;
+-- Runs every 30 s (pg_cron), right after every new alarm, and from the open dashboard.
+create or replace function public.scan_signal() returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null and not public.is_ort() then return; end if;
+
+  -- signal back
+  update public.signal_losses s set restored_at = now()
+  from public.profiles p
+  where p.id = s.user_id and s.restored_at is null
+    and p.signal_at > s.lost_at and p.signal_at > now() - interval '3 minutes';
+
+  -- new losses: signed-in employees (new app) last seen inside a boundary, no good signal for 3 min
+  insert into public.signal_losses (user_id, lost_at, reason, last_lat, last_lng, sector_id, zone_id, building_id)
+  select p.id, p.signal_at,
+         case when p.last_ping > now() - interval '3 minutes' then 'gps_off' else 'no_signal' end,
+         p.last_lat, p.last_lng, p.cur_sector_id, p.cur_zone_id, p.cur_building_id
+  from public.profiles p
+  where p.role = 'employee' and coalesce(p.active, true) and p.online
+    and p.signal_at is not null and p.signal_at < now() - interval '3 minutes'
+    and (p.cur_sector_id is not null or p.cur_zone_id is not null or p.cur_building_id is not null)
+    and not exists (select 1 from public.signal_losses s where s.user_id = p.id and s.restored_at is null);
+
+  -- escalate: lost within the hour before an active alarm (signal 1/2), or during it, where the alarm applies
+  update public.signal_losses s set status = 'open', escalated_at = now(), alarm_id = a.id
+  from public.alarms a
+  where s.status = 'logged' and s.restored_at is null
+    and a.active and a.kind in ('signal1', 'signal2')
+    and s.lost_at >= a.created_at - interval '1 hour'
+    and (a.scope = 'all'
+      or (a.scope = 'employee' and a.target_id = s.user_id)
+      or (a.scope = 'sector' and a.target_id = s.sector_id)
+      or (a.scope = 'zone' and a.target_id = s.zone_id)
+      or (a.scope = 'building' and a.target_id = s.building_id));
+end $$;
+revoke execute on function public.scan_signal() from anon;
+
+create or replace function public.scan_signal_on_alarm() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.scan_signal();
+  return null;
+end $$;
+drop trigger if exists alarms_scan_signal on public.alarms;
+create trigger alarms_scan_signal after insert on public.alarms for each statement execute function public.scan_signal_on_alarm();
+
+create extension if not exists pg_cron;
+select cron.unschedule(jobid) from cron.job where jobname = 'scan-signal';
+select cron.schedule('scan-signal', '30 seconds', 'select public.scan_signal()');

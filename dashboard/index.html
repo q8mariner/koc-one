@@ -49,7 +49,7 @@
       <div class="rail-mark"><img src="favicon-192.png" alt="ONE" width="48" height="48"></div>
       <button v-for="n in NAV" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k" :title="L(n.t)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="n.i"/></svg><span>{{ L(n.t) }}</span>
-        <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && kpi.active" class="red">{{ kpi.active }}</em>
+        <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && (kpi.active || kpi.lost)" class="red">{{ kpi.active + kpi.lost }}</em>
       </button>
       <button class="out" @click="toggleLang"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm-9 9h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span>{{ s.lang==='ar' ? 'English' : 'العربية' }}</span></button>
       <button @click="logout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg><span>{{ tr('خروج', 'Sign out') }}</span></button>
@@ -73,6 +73,19 @@
         <div class="kpi c-navy"><b>{{ kpi.inside }}<i>/{{ kpi.staff }}</i></b><span>{{ tr('داخل الحدود', 'Inside boundaries') }}</span></div>
         <div class="kpi c-green"><b>{{ kpi.online }}</b><span>{{ tr('متصل الآن', 'Online now') }}</span></div>
         <button class="kpi c-orange" @click="s.tab='reports'"><b>{{ kpi.newReports }}</b><span>{{ tr('بلاغ جديد', 'New reports') }}</span></button>
+      </div>
+
+      <!-- signal lost before/during an alarm: needs an ORT check -->
+      <div v-if="openLosses.length" class="sigwarn" role="alert">
+        <div class="sigwarn-h"><span class="lossmk sm"><i></i><b>!</b></span>
+          <strong>{{ tr('انقطعت إشارة موقع', 'Location signal lost for') }} {{ openLosses.length }} {{ tr('موظف قبل/أثناء الإنذار', openLosses.length===1 ? 'employee before/during an alarm' : 'employees before/during an alarm') }}</strong>
+          <span class="muted">{{ tr('— تأكد من سلامتهم ثم أكّد هنا', '— check they are safe, then confirm here') }}</span></div>
+        <div class="sigwarn-list">
+          <div v-for="l in openLosses" :key="l.id" class="sigitem">
+            <button class="linkbtn" @click="focusLoss(l)"><b>{{ name('employee', l.user_id) }}</b> · {{ lossArea(l) }} · {{ tr('منذ', 'for') }} {{ dur(l.lost_at, l.restored_at) }}<template v-if="l.restored_at"> · <span class="okc">{{ tr('عادت الإشارة', 'signal back') }}</span></template></button>
+            <span class="row gap8"><button class="btn xs" @click="callPerson(l.user_id)">☎</button><button class="btn xs okbtn" @click="askClear(l)">{{ tr('تأكيد السلامة', 'Confirm safe') }}</button></span>
+          </div>
+        </div>
       </div>
 
       <!-- ═════ AREAS: sectors → zones → buildings → employees ═════ -->
@@ -164,6 +177,8 @@
                 <small class="muted d">{{ tr('آخر ظهور', 'Last seen') }} {{ ago(p.last_seen) }}</small>
               </div>
               <span v-if="personStatus(p.id)" class="st" :class="STATUS[personStatus(p.id)][1]">{{ L(STATUS[personStatus(p.id)][0]) }}</span>
+              <button v-if="openLossOf(p.id)" class="st st-bad" @click="askClear(openLossOf(p.id))">{{ tr('انقطاع إشارة · تحقق', 'Signal lost · check') }}</button>
+              <span v-else-if="hiddenLossOf(p.id)" class="st st-none">{{ tr('انقطاع إشارة', 'Signal lost') }}</span>
               <button class="btn sm" @click="callPerson(p.id)" :aria-label="tr('اتصال', 'Call')">☎</button>
             </div>
             <p v-if="!peopleHere.length" class="calm">{{ tr('لا يوجد موظفون داخل هذا المبنى الآن.', 'Nobody is inside this building right now.') }}</p>
@@ -182,7 +197,7 @@
             <button class="fit" @click="fitAll">{{ tr('عرض الكل', 'Show all') }}</button>
             <div v-if="s.drawing" class="draw-hint">{{ tr('انقر لإضافة رؤوس المضلع، ثم انقر النقطة الأولى للإغلاق', 'Tap to add corners, then tap the first point to close') }}</div>
           </div>
-          <div class="legend" v-show="s.showMap"><span><i style="background:#2E9E5B"></i>{{ tr('آمن', 'Safe') }}</span><span><i style="background:#E5B80B"></i>{{ tr('بدون رد', 'No reply') }}</span><span><i style="background:#C62828"></i>{{ tr('مصاب/محتجز', 'Injured/trapped') }}</span><span><i style="background:#2B4C9B"></i>{{ tr('متصل', 'Online') }}</span><span><i style="background:#94A3B8"></i>{{ tr('غير متصل', 'Offline') }}</span></div>
+          <div class="legend" v-show="s.showMap"><span><i style="background:#2E9E5B"></i>{{ tr('آمن', 'Safe') }}</span><span><i style="background:#E5B80B"></i>{{ tr('بدون رد', 'No reply') }}</span><span><i style="background:#C62828"></i>{{ tr('مصاب/محتجز', 'Injured/trapped') }}</span><span><i style="background:#2B4C9B"></i>{{ tr('متصل', 'Online') }}</span><span><i style="background:#94A3B8"></i>{{ tr('غير متصل', 'Offline') }}</span><span><i style="background:#fff;box-shadow:0 0 0 3px #C62828"></i>{{ tr('انقطاع إشارة (يحتاج تحقق)', 'Signal lost (needs check)') }}</span></div>
         </div>
       </section>
 
@@ -229,6 +244,31 @@
               <p v-if="!roster(selIncObj).length" class="calm">{{ tr('لا أحد داخل نطاق هذا الإنذار حاليًا.', 'Nobody is inside this alarm’s scope right now.') }}</p>
             </div>
           </div>
+        </div>
+
+        <!-- location-signal log -->
+        <div class="level-head siglog-head">
+          <h2 class="sec">{{ tr('سجل انقطاع إشارة الموقع', 'Location signal log') }}</h2>
+          <div class="seg">
+            <button :class="{on: s.lossFilter==='all'}" @click="s.lossFilter='all'">{{ tr('الكل', 'All') }}</button>
+            <button :class="{on: s.lossFilter==='open'}" @click="s.lossFilter='open'">{{ tr('بانتظار التحقق', 'Needs check') }} <b v-if="openLosses.length">{{ openLosses.length }}</b></button>
+            <button :class="{on: s.lossFilter==='now'}" @click="s.lossFilter='now'">{{ tr('مقطوعة الآن', 'Lost now') }}</button>
+          </div>
+        </div>
+        <p class="muted hint">{{ tr('في الأوقات العادية يختفي الموظف من الخريطة تلقائيًا عند انقطاع إشارته (3 دقائق بلا إشارة أو GPS مغلق) ويُسجَّل هنا. إذا انقطعت خلال الساعة السابقة لإنذار أو أثناءه في نطاقه، يبقى ظاهرًا على الخريطة حتى يؤكد ORT سلامته.', 'In normal times an employee disappears from the map when their signal is lost (3 min without signal, or GPS off) and is logged here. If it is lost within the hour before an alarm covering them, or during it, they stay on the map until ORT confirms they are safe.') }}</p>
+        <div class="siglog">
+          <div v-for="l in lossLog" :key="l.id" class="sigrow" :class="{open: l.status==='open'}">
+            <div class="grow min0">
+              <strong>{{ name('employee', l.user_id) }}</strong>
+              <small class="muted d">{{ lossArea(l) }} · {{ lossReason(l) }}</small>
+              <small class="muted d">{{ tr('انقطعت', 'Lost') }} {{ fmt(l.lost_at) }} · <template v-if="l.restored_at">{{ tr('عادت', 'back') }} {{ fmt(l.restored_at) }} ({{ dur(l.lost_at, l.restored_at) }})</template><template v-else>{{ tr('ما زالت مقطوعة', 'still lost') }} ({{ dur(l.lost_at) }})</template></small>
+              <small v-if="lossAlarm(l)" class="muted d">{{ tr('الإنذار: ', 'Alarm: ') }}{{ lossAlarm(l) }}</small>
+              <small v-if="l.status==='cleared'" class="d okc">{{ tr('تحقق', 'Checked by') }} {{ name('employee', l.cleared_by) }} · {{ fmt(l.cleared_at) }} — {{ l.note }}</small>
+            </div>
+            <span class="st" :class="lossState(l)[1]">{{ lossState(l)[0] }}</span>
+            <span v-if="l.status==='open'" class="row gap8"><button class="btn sm" @click="callPerson(l.user_id)">☎</button><button class="btn sm okbtn" @click="askClear(l)">{{ tr('تأكيد السلامة', 'Confirm safe') }}</button></span>
+          </div>
+          <p v-if="!lossLog.length" class="calm">{{ tr('لا يوجد انقطاع إشارة مسجّل.', 'No signal losses recorded.') }}</p>
         </div>
       </section>
 
@@ -347,9 +387,24 @@
     <nav class="bottomnav" :aria-label="tr('الأقسام', 'Sections')">
       <button v-for="n in NAV" :key="n.k" :class="{on: s.tab===n.k}" @click="s.tab=n.k">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="n.i"/></svg><span>{{ L(n.t) }}</span>
-        <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && kpi.active" class="red">{{ kpi.active }}</em>
+        <em v-if="n.k==='reports' && kpi.newReports">{{ kpi.newReports }}</em><em v-if="n.k==='alarms' && (kpi.active || kpi.lost)" class="red">{{ kpi.active + kpi.lost }}</em>
       </button>
     </nav>
+
+    <!-- confirm an employee is safe after a signal loss -->
+    <div v-if="s.clr" class="modal-bg" @click.self="s.clr=null">
+      <div class="modal" role="dialog" :aria-label="tr('تأكيد سلامة الموظف', 'Confirm the employee is safe')">
+        <div class="row"><h2 class="sec">{{ tr('تأكيد سلامة الموظف', 'Confirm the employee is safe') }}</h2><button class="icon-btn" @click="s.clr=null" :aria-label="tr('إغلاق', 'Close')">✕</button></div>
+        <p><b>{{ name('employee', s.clr.loss.user_id) }}</b> · {{ lossArea(s.clr.loss) }}<br>
+          <span class="muted">{{ tr('انقطعت الإشارة', 'Signal lost') }} {{ fmt(s.clr.loss.lost_at) }} · {{ lossReason(s.clr.loss) }}<template v-if="lossAlarm(s.clr.loss)"> · {{ lossAlarm(s.clr.loss) }}</template></span></p>
+        <label for="clrnote">{{ tr('كيف تم التحقق؟ (إلزامي)', 'How was it checked? (required)') }}</label>
+        <textarea id="clrnote" rows="3" v-model="s.clr.note" :placeholder="tr('مثال: اتصلت به وهو في نقطة التجمع MP-3 وبخير', 'e.g. Called him — at muster point MP-3 and fine')"></textarea>
+        <div class="row gap8" style="margin-top:10px">
+          <button class="btn okbtn grow" :disabled="s.clr.busy || s.clr.note.trim().length<3" @click="saveClear">{{ tr('تأكيد السلامة وإلغاء التنبيه', 'Confirm safe and clear the alert') }}</button>
+          <button class="btn ghost" @click="callPerson(s.clr.loss.user_id)">☎ {{ tr('اتصال', 'Call') }}</button>
+        </div>
+      </div>
+    </div>
 
     <!-- alarm composer -->
     <div v-if="s.comp" class="modal-bg" @click.self="s.comp=null">

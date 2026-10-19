@@ -51,6 +51,8 @@ class LiveService extends ChangeNotifier {
     await _registerDevice();
     await _startLocation();
     await sb.from('profiles').update({'online': true, 'last_seen': DateTime.now().toUtc().toIso8601String()}).eq('id', uid);
+    _heartbeat();
+    _beat = Timer.periodic(const Duration(seconds: 60), (_) => _heartbeat());
     notifyListeners();
     _insist(); // alarms the background service already delivered while the app was closed
     _openRingingCall(); // a call the background service is ringing for
@@ -79,6 +81,7 @@ class LiveService extends ChangeNotifier {
     _started = false;
     await _posSub?.cancel();
     _poll?.cancel();
+    _beat?.cancel();
     await NativeAlarm.stop();
     await NativeAlarm.unregisterDevice();
     for (final c in _channels) {
@@ -118,6 +121,21 @@ class LiveService extends ChangeNotifier {
 
   final List<RealtimeChannel> _channels = [];
   Timer? _poll;
+  Timer? _beat;
+
+  /// Location-signal heartbeat: ORT sees an employee as "signal lost" after 3 min without one
+  /// (phone off, no network) or while GPS is off. The background service sends the same when the app is closed.
+  Future<void> _heartbeat() async {
+    var gps = false;
+    try {
+      final perm = await Geolocator.checkPermission();
+      gps = await Geolocator.isLocationServiceEnabled() &&
+          (perm == LocationPermission.always || perm == LocationPermission.whileInUse);
+    } catch (_) {}
+    try {
+      await sb.rpc('heartbeat', params: {'p_gps': gps});
+    } catch (_) {}
+  }
 
   void _subscribe() {
     // Separate channels: a problem with one subscription can never block alarm delivery.

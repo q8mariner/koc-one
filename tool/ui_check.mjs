@@ -36,6 +36,11 @@ DATA.people = people;
 DATA.alarms = [{ id: "a1", kind: "signal2", title: "الإشارة 2 — إخلاء", title_en: "Signal 2 — Evacuate", body: "1. أخلِ المنطقة", scope: "building", target_id: "b1", active: true, drill: true, created_at: now, created_by: "me", batch_id: "bt1" },
   { id: "a2", kind: "signal2", title: "الإشارة 2 — إخلاء", title_en: "Signal 2 — Evacuate", body: "1. أخلِ المنطقة", scope: "building", target_id: "b2", active: true, drill: true, created_at: now, created_by: "me", batch_id: "bt1" }];
 DATA.acks = [{ alarm_id: "a1", user_id: "p0", status: "safe", updated_at: now }, { alarm_id: "a1", user_id: "p1", status: "trapped", updated_at: now }, { alarm_id: "a1", user_id: "p2", status: "received", updated_at: now }];
+DATA.losses = [
+  { id: "l1", user_id: "p3", lost_at: new Date(Date.now() - 9 * 60000).toISOString(), detected_at: now, reason: "no_signal", last_lat: 29.0762, last_lng: 48.0778, sector_id: "s1", zone_id: "z1", building_id: "b1", restored_at: null, status: "open", alarm_id: "a1" },
+  { id: "l2", user_id: "p5", lost_at: new Date(Date.now() - 50 * 60000).toISOString(), detected_at: now, reason: "gps_off", last_lat: 29.07, last_lng: 48.08, sector_id: "s1", zone_id: "z1", building_id: null, restored_at: null, status: "logged" },
+  { id: "l3", user_id: "p1", lost_at: new Date(Date.now() - 300 * 60000).toISOString(), detected_at: now, reason: "no_signal", sector_id: "s1", zone_id: "z1", building_id: "b1", restored_at: new Date(Date.now() - 280 * 60000).toISOString(), status: "cleared", cleared_by: "me", cleared_at: now, note: "اتصلت به وهو بخير" },
+];
 DATA.reports = [{ id: "r1", type: "fire", user_id: "p1", status: "new", created_at: now, photo_paths: ["x"], lat: 29.07, lng: 48.08 }];
 
 async function run(name, viewport, lang, steps) {
@@ -83,6 +88,7 @@ const steps = [
   ["7-alarms", S(`s.edit=null; s.tab='alarms';`)],
   ["8-people", S(`s.tab='people'; s.psel=['p3'];`)],
   ["9-reports", S(`s.tab='reports';`)],
+  ["10-clear", S(`s.tab='alarms'; st.askClear(s.losses[0]);`)],
 ];
 await run("phone-ar", { width: 390, height: 844 }, "ar", steps);
 await run("phone-en", { width: 390, height: 844 }, "en", steps.slice(0, 5));

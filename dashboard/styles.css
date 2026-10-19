@@ -265,6 +265,31 @@ button.kpi { cursor: pointer; }
 .leaflet-popup-content-wrapper { border-radius: 10px; font-family: var(--font); }
 .leaflet-tooltip { font-family: var(--font); }
 
+
+/* ── location-signal losses ── */
+.lossmk { position: relative; display: grid; place-items: center; width: 34px; height: 34px; }
+.lossmk i { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--bad); background: rgba(198, 40, 40, .18); animation: lossring 1.4s ease-out infinite; }
+.lossmk b { position: relative; width: 20px; height: 20px; border-radius: 50%; background: var(--bad); color: #fff; font: 800 13px/20px var(--font); text-align: center; box-shadow: 0 0 0 2px #fff; }
+.lossmk.sm { width: 26px; height: 26px; flex: none; } .lossmk.sm b { width: 16px; height: 16px; font-size: 11px; line-height: 16px; }
+@keyframes lossring { 0% { transform: scale(.6); opacity: 1; } 100% { transform: scale(1.35); opacity: 0; } }
+.sigwarn { border: 1px solid #F3B4B4; background: #FFF5F5; border-radius: 14px; padding: 10px 14px; margin-bottom: 14px; }
+.sigwarn-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: #A11F1F; }
+.sigwarn-list { display: flex; flex-direction: column; margin-top: 6px; }
+.sigitem { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; border-top: 1px dashed #F3C9C9; padding: 4px 0; }
+.sigitem .linkbtn { text-align: start; min-width: 0; overflow-wrap: anywhere; }
+.okc { color: #1F7A45; }
+.btn.okbtn { background: var(--ok); border-color: var(--ok); color: #fff; }
+button.st { border: 0; cursor: pointer; font: inherit; }
+.siglog-head { margin-top: 26px; }
+.seg { display: inline-flex; background: var(--soft); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button { border: 0; background: none; padding: 5px 12px; border-radius: 8px; cursor: pointer; color: var(--navy); font-size: 13px; }
+.seg button.on { background: #fff; font-weight: 700; box-shadow: 0 1px 3px rgba(20, 40, 90, .12); }
+.seg b { background: var(--bad); color: #fff; border-radius: 8px; padding: 0 6px; font-size: 11px; }
+.siglog { display: flex; flex-direction: column; gap: 8px; }
+.sigrow { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; flex-wrap: wrap; }
+.sigrow.open { border-color: #F3B4B4; box-shadow: inset 4px 0 0 var(--bad); }
+.sigrow .grow { flex: 1 1 260px; }
+
 /* ── tablet ── */
 @media (max-width: 1180px) {
   .areas { grid-template-columns: minmax(0, 1fr) minmax(280px, 42%); }

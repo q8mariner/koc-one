@@ -76,6 +76,8 @@ createApp({
       privKey: null, pass: "", keyRow: null, hasKey: false, opened: {}, newPass: "", newPass2: "",
       // calls
       call: null, callState: "", muted: false,
+      // location-signal losses
+      losses: [], clr: null, lossFilter: "all",
     });
 
     let map, layers, peopleLayer, drawLayer, caller;
@@ -112,13 +114,14 @@ createApp({
       const { data: me } = await sb.from("profiles").select("*").eq("id", s.session.user.id).single();
       s.me = me;
       if (!me || me.role !== "ort") return;
+      try { await sb.rpc("scan_signal"); } catch (_) {}
       await loadAll();
       subscribe();
       await nextTick(); initMap();
     }
 
     async function loadAll() {
-      const [a, b, c, d, e, f, g, k] = await Promise.all([
+      const [a, b, c, d, e, f, g, k, sl] = await Promise.all([
         sb.from("sectors").select("*").order("created_at"),
         sb.from("zones").select("*").order("created_at"),
         sb.from("buildings").select("*").order("created_at"),
@@ -127,10 +130,11 @@ createApp({
         sb.from("alarm_acks").select("*"),
         sb.from("reports").select("*").order("created_at", { ascending: false }).limit(200),
         sb.from("org_private_key").select("*").maybeSingle(),
+        sb.from("signal_losses").select("*").order("detected_at", { ascending: false }).limit(300),
       ]);
       s.sectors = a.data || []; s.zones = b.data || []; s.buildings = c.data || []; s.people = d.data || [];
       s.alarms = e.data || []; s.acks = f.data || []; s.reports = g.data || [];
-      s.keyRow = k.data; s.hasKey = !!k.data;
+      s.keyRow = k.data; s.hasKey = !!k.data; s.losses = sl.data || [];
       if (!s.selInc) { const act = incidents.value.find((x) => x.active); if (act) s.selInc = act.key; }
       loadAvatars();
     }
@@ -141,6 +145,15 @@ createApp({
         .on("postgres_changes", { event: "*", schema: "public", table: "alarms" }, ({ new: r }) => { r && r.id && upsertLocal(s.alarms, r); })
         .on("postgres_changes", { event: "*", schema: "public", table: "alarm_acks" }, ({ new: r }) => { if (r && r.alarm_id) upsertLocal(s.acks, r, (x) => x.alarm_id + x.user_id); drawPeople(); })
         .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, ({ new: r }) => { if (r && r.id) { upsertLocal(s.people, r); drawPeople(); } })
+        .on("postgres_changes", { event: "*", schema: "public", table: "signal_losses" }, ({ new: r, old }) => {
+          if (!r || !r.id) return;
+          const was = byId(s.losses, r.id);
+          upsertLocal(s.losses, r); drawPeople();
+          if (r.status === "open" && (!was || was.status !== "open")) {
+            toast(tr("انقطعت إشارة موقع ", "Location signal lost: ") + name("employee", r.user_id) + tr(" أثناء إنذار — تأكد من سلامته", " during an alarm — check they are safe"));
+            beep();
+          }
+        })
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "reports" }, ({ new: r }) => { s.reports.unshift(r); toast(tr("بلاغ جديد وارد إلى 160 — ", "New 160 report — ") + (lt(REPORT_TYPES[r.type]) || r.type)); beep(); })
         .subscribe();
     }
@@ -256,16 +269,67 @@ createApp({
       s.zones.forEach((x) => { const sec = byId(s.sectors, x.sector_id); const p = poly(x.boundary, { color: x.classification === "unclassified" ? (sec?.color || "#2B4C9B") : "#E07B29", weight: hl("zone", x.id) ? 4 : 2, fillOpacity: 0.1 }); p && p.bindTooltip(`${x.name} · ${lt(CLASSES[x.classification])}`).on("click", () => goTo("zone", x.id)).addTo(layers); });
       s.buildings.forEach((x) => { const p = poly(x.boundary, { color: hl("building", x.id) ? "#E5B80B" : "#1F3A7A", weight: hl("building", x.id) ? 3 : 2, fillColor: "#2B4C9B", fillOpacity: 0.18 }); p && p.bindTooltip(tr("مبنى: ", "Building: ") + x.name).on("click", () => goTo("building", x.id)).addTo(layers); });
     }
+    // ───── Location-signal losses ─────
+    // logged  → normal times: hidden from the map, kept in the log
+    // open    → lost ≤1 h before or during an alarm: shown on the map until ORT confirms the employee is safe
+    // cleared → confirmed by ORT, back in the log
+    const openLossOf = (uid) => s.losses.find((l) => l.user_id === uid && l.status === "open");
+    const hiddenLossOf = (uid) => s.losses.find((l) => l.user_id === uid && !l.restored_at && l.status !== "open");
+    const openLosses = computed(() => s.losses.filter((l) => l.status === "open").sort((a, b) => (a.lost_at < b.lost_at ? -1 : 1)));
+    const lossLog = computed(() => {
+      const rows = s.lossFilter === "open" ? openLosses.value : s.lossFilter === "now" ? s.losses.filter((l) => !l.restored_at) : s.losses;
+      return [...rows].sort((a, b) => (b.status === "open") - (a.status === "open") || (a.detected_at < b.detected_at ? 1 : -1));
+    });
+    const lossReason = (l) => (l.reason === "gps_off" ? tr("GPS مغلق", "GPS off") : tr("لا اتصال بالجهاز", "Phone unreachable"));
+    const lossArea = (l) => [l.sector_id && name("sector", l.sector_id), l.zone_id && name("zone", l.zone_id), l.building_id && name("building", l.building_id)].filter(Boolean).join(" › ") || "—";
+    const lossState = (l) => (l.status === "open" ? [tr("بانتظار التحقق", "Needs check"), "st-bad"] : l.status === "cleared" ? [tr("تم التحقق", "Checked"), "st-ok"] : [tr("عادي · أُخفي من الخريطة", "Normal · hidden from map"), "st-none"]);
+    function dur(a, b) { const m = Math.max(0, Math.round((new Date(b || Date.now()) - new Date(a)) / 60000)); void s._tick; return m < 60 ? tr(`${m} د`, `${m} min`) : tr(`${Math.floor(m / 60)} س ${m % 60} د`, `${Math.floor(m / 60)} h ${m % 60} min`); }
+    function lossAlarm(l) { const a = l.alarm_id && byId(s.alarms, l.alarm_id); return a ? atitle(a) : ""; }
+    function focusLoss(l) {
+      s.tab = "areas";
+      const p = byId(s.people, l.user_id);
+      const pt = !l.restored_at ? [l.last_lat, l.last_lng] : [p?.last_lat, p?.last_lng];
+      nextTick(() => { if (map && pt[0]) { map.setView(pt, 17); const mk = lossMarkers[l.id]; mk && mk.openPopup(); document.getElementById("map")?.scrollIntoView({ behavior: "smooth", block: "center" }); } });
+    }
+    function askClear(l) { if (l) s.clr = { loss: l, note: "", busy: false }; }
+    async function saveClear() {
+      const c = s.clr; if (!c || c.note.trim().length < 3) return;
+      c.busy = true;
+      const patch = { status: "cleared", cleared_by: s.me.id, cleared_at: new Date().toISOString(), note: c.note.trim() };
+      const { error } = await sb.from("signal_losses").update(patch).eq("id", c.loss.id);
+      c.busy = false;
+      if (error) return toast(tr("تعذّر الحفظ: ", "Couldn’t save: ") + error.message);
+      Object.assign(c.loss, patch); s.clr = null; drawPeople();
+      toast(tr("سُجّل التحقق ونُقل إلى سجل انقطاع الإشارة", "Check recorded and moved to the signal log"));
+    }
+    window.__kocClearLoss = (id) => askClear(byId(s.losses, id));
+    let lossMarkers = {};
+
     const STATUS_COLOR = { safe: "#2E9E5B", received: "#E5B80B", none: "#E5B80B", need_help: "#E07B29", injured: "#C62828", trapped: "#C62828" };
     function drawPeople() {
-      if (!peopleLayer) return; peopleLayer.clearLayers();
-      staff.value.filter((p) => p.last_lat).forEach((p) => {
+      if (!peopleLayer) return; peopleLayer.clearLayers(); lossMarkers = {};
+      staff.value.forEach((p) => {
+        const ol = openLossOf(p.id);
+        if (ol) return drawLoss(p, ol);
+        if (!p.last_lat || hiddenLossOf(p.id)) return; // signal lost in normal times → off the map, in the log
         const st = personStatus(p.id);
         L.circleMarker([p.last_lat, p.last_lng], { radius: 7, color: "#ffffff", weight: 2, fillColor: STATUS_COLOR[st] || (p.online ? "#2B4C9B" : "#94A3B8"), fillOpacity: 1 })
           .bindPopup(`<b>${esc(p.full_name)}</b><br>${esc(p.employee_no || "")} · ${tr("فصيلة", "Blood")} ${esc(p.blood_type || "—")}<br>${esc(name("building", p.cur_building_id))} · ${tr("آخر ظهور", "last seen")} ${ago(p.last_seen)}<br>
             ${st ? tr("الحالة: ", "Status: ") + lt(STATUS[st][0]) + "<br>" : ""}<button class="mini" onclick="window.__kocCall('${p.id}')">${tr("اتصال صوتي", "Voice call")}</button>`)
           .addTo(peopleLayer);
       });
+    }
+    function drawLoss(p, l) {
+      const pt = !l.restored_at ? [l.last_lat ?? p.last_lat, l.last_lng ?? p.last_lng] : [p.last_lat, p.last_lng];
+      if (pt[0] == null) return;
+      const icon = L.divIcon({ className: "", html: '<span class="lossmk"><i></i><b>!</b></span>', iconSize: [34, 34], iconAnchor: [17, 17] });
+      const back = l.restored_at ? `<br><span style="color:#1F7A45">${tr("عادت الإشارة ", "Signal back ")}${esc(fmt(l.restored_at))}</span>` : "";
+      lossMarkers[l.id] = L.marker(pt, { icon, zIndexOffset: 1000 })
+        .bindPopup(`<b>${esc(p.full_name)}</b> · ${esc(p.employee_no || "")}<br><b style="color:#A11F1F">${tr("انقطاع إشارة الموقع", "Location signal lost")}</b> · ${esc(lossReason(l))}<br>
+          ${tr("منذ ", "Since ")}${esc(fmt(l.lost_at))} (${esc(dur(l.lost_at, l.restored_at))})${back}<br>${esc(lossArea(l))}${lossAlarm(l) ? "<br>" + esc(lossAlarm(l)) : ""}<br>
+          <button class="mini" onclick="window.__kocCall('${p.id}')">${tr("اتصال صوتي", "Voice call")}</button>
+          <button class="mini" style="background:#2E9E5B" onclick="window.__kocClearLoss('${l.id}')">${tr("تأكيد السلامة", "Confirm safe")}</button>`)
+        .addTo(peopleLayer);
     }
     function fitAll() {
       if (!map) return;
@@ -559,6 +623,7 @@ createApp({
       staff: staff.value.length,
       newReports: s.reports.filter((r) => r.status === "new").length,
       active: activeIncidents.value.length,
+      lost: openLosses.value.length,
     }));
 
     onMounted(async () => {
@@ -584,6 +649,8 @@ createApp({
       peopleFiltered, togglePsel, newPerson, savePerson, avatar, editPerson, pickPhoto, savePersonEdit, verifyId, where,
       callPerson, hangup, toggleMute,
       setupKeys, unlockKey, openReport, setReportStatus,
+      // signal losses
+      openLossOf, hiddenLossOf, openLosses, lossLog, lossReason, lossArea, lossState, lossAlarm, dur, focusLoss, askClear, saveClear,
     };
   },
 }).mount("#app");

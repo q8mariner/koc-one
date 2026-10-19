@@ -50,6 +50,7 @@ class AlarmWatchService : Service() {
             exec.execute {
                 pollCalls()
                 if (n % 4 == 0) poll()
+                if (n % 12 == 0) heartbeat()
             }
             handler.postDelayed(this, INTERVAL_MS)
         }
@@ -178,6 +179,22 @@ class AlarmWatchService : Service() {
         CallKit.startRinging(this, id)
         CallKit.notifId = notifId
         try { startActivity(i) } catch (_: Exception) {}
+    }
+
+    /** Location-signal heartbeat every 60 s (also while the app is closed): phone alive + GPS on/off. */
+    private fun heartbeat() {
+        val p = prefs()
+        val token = p.getString("token", null) ?: return
+        val base = p.getString("url", null) ?: return
+        val key = p.getString("key", null) ?: return
+        val gps = try {
+            val lm = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+            val on = if (Build.VERSION.SDK_INT >= 28) lm.isLocationEnabled
+                     else lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)
+            on && (Build.VERSION.SDK_INT < 23 ||
+                checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+        } catch (_: Exception) { false }
+        rpc(base, key, "device_heartbeat", JSONObject().put("p_token", token).put("p_gps", gps))
     }
 
     private fun poll() {
