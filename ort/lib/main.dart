@@ -25,9 +25,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: navyD, statusBarIconBrightness: Brightness.light, systemNavigationBarColor: Colors.white, systemNavigationBarIconBrightness: Brightness.dark));
-  await notes.initialize(const InitializationSettings(android: AndroidInitializationSettings('@drawable/ic_stat_one')));
-  await notes.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(
-      const AndroidNotificationChannel('ort_events', 'ORT events · أحداث ORT', importance: Importance.max, playSound: true, enableVibration: true));
+  // never let notifications setup stop the console from opening
+  try {
+    await notes.initialize(const InitializationSettings(android: AndroidInitializationSettings('@drawable/ic_stat_one')));
+    await notes.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(
+        const AndroidNotificationChannel('ort_events', 'ORT events · أحداث ORT', importance: Importance.max, playSound: true, enableVibration: true));
+  } catch (e) {
+    debugPrint('notifications unavailable: $e');
+  }
   runApp(const MaterialApp(debugShowCheckedModeBanner: false, title: 'ONE ORT', home: Console()));
 }
 
@@ -65,7 +70,8 @@ class _ConsoleState extends State<Console> with WidgetsBindingObserver {
       ..setNavigationDelegate(NavigationDelegate(
         onPageStarted: (_) => setState(() { _loading = true; _error = false; }),
         onPageFinished: (_) => setState(() => _loading = false),
-        onWebResourceError: (e) { if (e.isForMainFrame ?? true) setState(() { _error = true; _loading = false; }); },
+        // only the page itself failing means "offline" (a map tile or font failing does not)
+        onWebResourceError: (e) { if (e.isForMainFrame == true) setState(() { _error = true; _loading = false; }); },
       ));
     final p = c.platform;
     if (p is AndroidWebViewController) {
@@ -77,18 +83,24 @@ class _ConsoleState extends State<Console> with WidgetsBindingObserver {
       p.setOnShowFileSelector(_pickFile); // employee ID photo upload
     }
     c.loadRequest(Uri.parse(dashboardUrl));
+    // the splash never stays more than 12 s even if the page never reports "finished"
+    Future.delayed(const Duration(seconds: 12), () { if (mounted && _loading) setState(() => _loading = false); });
     _start();
   }
 
   Future<void> _start() async {
-    final sp = await SharedPreferences.getInstance();
-    _bioEnabled = sp.getBool('bio') ?? false;
-    _ar = (sp.getString('lang') ?? 'ar') == 'ar';
+    try {
+      final sp = await SharedPreferences.getInstance();
+      _bioEnabled = sp.getBool('bio') ?? false;
+      _ar = (sp.getString('lang') ?? 'ar') == 'ar';
+    } catch (_) {}
     if (_bioEnabled) {
       setState(() => _locked = true);
       _unlock();
     }
-    await Permission.notification.request();
+    try {
+      await Permission.notification.request();
+    } catch (_) {}
   }
 
   @override

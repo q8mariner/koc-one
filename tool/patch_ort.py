@@ -32,6 +32,14 @@ g = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 24", g)
 g = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 24", g)
 g = g.replace("JavaVersion.VERSION_1_8", "JavaVersion.VERSION_17")
 g = re.sub(r"ndkVersion\s*=\s*flutter\.ndkVersion", 'ndkVersion = "27.0.12077973"', g)
+# No code / resource shrinking: it strips the notification icon (looked up by name) and plugin classes,
+# which crashes the app at start.
+if kts:
+    g = g.replace('signingConfig = signingConfigs.getByName("debug")',
+                  'signingConfig = signingConfigs.getByName("debug")\n            isMinifyEnabled = false\n            isShrinkResources = false')
+else:
+    g = g.replace("signingConfig = signingConfigs.debug",
+                  "signingConfig = signingConfigs.debug\n            minifyEnabled false\n            shrinkResources false")
 if kts:
     g = re.sub(r"compileOptions\s*\{", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", g, count=1)
     g += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n    implementation("androidx.appcompat:appcompat:1.7.0")\n}\n'
@@ -63,4 +71,5 @@ for f in res_src.rglob("*"):
         out = app / "src/main/res" / f.relative_to(res_src)
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(f, out)
+assert "inifyEnabled" in g, "release block not found"
 print("ONE ORT patched")
