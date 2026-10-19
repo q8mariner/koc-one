@@ -7,6 +7,7 @@ import 'screens/alarm.dart';
 import 'screens/call.dart';
 import 'screens/shell.dart';
 import 'screens/login.dart';
+import 'services/applock.dart';
 import 'services/live.dart';
 import 'services/notify.dart';
 import 'ui.dart';
@@ -19,6 +20,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
   await Lang.I.load();
+  AppLock.I.coldSession = Supabase.instance.client.auth.currentSession != null;
   await Notify.init();
   Notify.onTap = _routePayload;
   runApp(const KocOneApp());

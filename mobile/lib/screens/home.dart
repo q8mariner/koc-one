@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
@@ -107,11 +106,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _logout() async {
-    await live.stop();
-    await Supabase.instance.client.auth.signOut();
-  }
-
   Future<void> _call160() async {
     final ok = await launchUrl(Uri(scheme: 'tel', path: ecc160Number));
     if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('تعذّر فتح الاتصال — اطلب 160 يدويًا', 'Couldn’t open the dialer — call 160 manually'))));
@@ -128,11 +122,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: C.navy),
-            onSelected: (v) => v == 'out' ? _logout() : (v == 'lang' ? Lang.I.toggle() : _askPerms()),
+            onSelected: (_) => _askPerms(),
             itemBuilder: (_) => [
-              PopupMenuItem(value: 'lang', child: Text(Lang.I.isEn ? 'العربية' : 'English')),
               PopupMenuItem(value: 'perm', child: Text(tr('مراجعة الأذونات', 'Review permissions'))),
-              PopupMenuItem(value: 'out', child: Text(tr('تسجيل الخروج', 'Sign out'))),
             ],
           ),
         ],

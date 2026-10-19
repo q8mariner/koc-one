@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../geo.dart';
@@ -45,6 +46,7 @@ class LiveService extends ChangeNotifier {
     if (_started) return;
     _started = true;
     me = await sb.from('profiles').select().eq('id', uid).single();
+    await _restoreWhere();
     await _loadAreas();
     await _loadHistory();
     _subscribe();
@@ -370,14 +372,56 @@ class LiveService extends ChangeNotifier {
     });
   }
 
+  // ── Where I was last time ──
+  // The app starts from the last area it reported, so reopening it (or restarting the phone) in the
+  // same place sends no "entered" alert; a different place does.
+  String get _whereKey => 'one.where.$uid';
+
+  Future<void> _restoreWhere() async {
+    String? s, z, b;
+    try {
+      final saved = (await SharedPreferences.getInstance()).getString(_whereKey);
+      if (saved != null) {
+        final parts = saved.split('|').map((x) => x.isEmpty ? null : x).toList();
+        if (parts.length == 3) { s = parts[0]; z = parts[1]; b = parts[2]; }
+      } else {
+        s = me?['cur_sector_id']; z = me?['cur_zone_id']; b = me?['cur_building_id'];
+      }
+    } catch (_) {}
+    where = Position3(s, z, b);
+  }
+
+  Future<void> _saveWhere() async {
+    try {
+      await (await SharedPreferences.getInstance()).setString(_whereKey, '${where.sectorId ?? ''}|${where.zoneId ?? ''}|${where.buildingId ?? ''}');
+    } catch (_) {}
+  }
+
+  static bool _same(Position3 a, Position3 b) => a.sectorId == b.sectorId && a.zoneId == b.zoneId && a.buildingId == b.buildingId;
+
+  // A boundary crossing counts only when the fix is precise (≤ 25 m) or two fixes in a row agree,
+  // so GPS drift along a boundary doesn't fire enter/exit over and over.
+  Position3? _candidate;
+
   void _onPosition(Position p) {
     pos = p;
     gpsState = tr('GPS · دقة ${p.accuracy.round()} م', 'GPS · accuracy ${p.accuracy.round()} m');
     final next = areas.locate(p.latitude, p.longitude);
     final prev = where;
-    final changed = next.sectorId != prev.sectorId || next.zoneId != prev.zoneId || next.buildingId != prev.buildingId;
-    where = next;
+    var changed = !_same(next, prev);
     if (changed) {
+      if (p.accuracy > 100) {
+        changed = false; // too vague to decide
+      } else if (p.accuracy > 25 && (_candidate == null || !_same(_candidate!, next))) {
+        _candidate = next; // wait for a second fix that agrees
+        changed = false;
+      }
+    }
+    if (!changed && _same(next, prev)) _candidate = null;
+    if (changed) {
+      _candidate = null;
+      where = next;
+      _saveWhere();
       _transition('sector', prev.sectorId, next.sectorId, areas.sector);
       _transition('zone', prev.zoneId, next.zoneId, areas.zone);
       _transition('building', prev.buildingId, next.buildingId, areas.building);
@@ -392,12 +436,30 @@ class LiveService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // One alert per area: the same enter/exit alert isn't repeated within 30 minutes.
+  final Map<String, int> _alerted = {};
+
+  Future<bool> _shouldAlert(String key) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    SharedPreferences? sp;
+    try { sp = await SharedPreferences.getInstance(); } catch (_) {}
+    final last = _alerted[key] ?? sp?.getInt('one.alert.$uid.$key') ?? 0;
+    if (now - last < 30 * 60 * 1000) return false;
+    _alerted[key] = now;
+    try { await sp?.setInt('one.alert.$uid.$key', now); } catch (_) {}
+    return true;
+  }
+
+  void _alertOnce(String key, void Function() show) {
+    _shouldAlert(key).then((ok) { if (ok) show(); });
+  }
+
   void _transition(String type, String? from, String? to, Map<String, dynamic>? Function(String?) lookup) {
     if (from == to) return;
     if (from != null) {
       _logEvent(type, from, 'exit');
       final a = lookup(from);
-      if (a != null && type != 'building') Notify.message('exit-$from', tr('غادرت حدود ', 'You left ') + '${a['name']}', tr('لن تصلك إنذارات هذه المنطقة حتى تعود إليها.', 'You won’t get this area’s alarms until you return.'));
+      if (a != null && type != 'building') _alertOnce('exit-$from', () => Notify.message('exit-$from', tr('غادرت حدود ', 'You left ') + '${a['name']}', tr('لن تصلك إنذارات هذه المنطقة حتى تعود إليها.', 'You won’t get this area’s alarms until you return.')));
     }
     if (to != null) {
       _logEvent(type, to, 'enter');
@@ -405,8 +467,8 @@ class LiveService extends ChangeNotifier {
       if (a != null) {
         final cls = type == 'zone' ? _clsLabel(a['classification']) : '';
         final msg = (a['entry_message'] as String?)?.trim();
-        Notify.message('enter-$to', tr('دخلت حدود ', 'You entered ') + '${a['name']}$cls',
-            (msg == null || msg.isEmpty) ? tr('تصلك إنذارات هذه المنطقة ما دمت داخلها.', 'You’ll get this area’s alarms while you are inside it.') : msg);
+        _alertOnce('enter-$to', () => Notify.message('enter-$to', tr('دخلت حدود ', 'You entered ') + '${a['name']}$cls',
+            (msg == null || msg.isEmpty) ? tr('تصلك إنذارات هذه المنطقة ما دمت داخلها.', 'You’ll get this area’s alarms while you are inside it.') : msg));
       }
     }
   }

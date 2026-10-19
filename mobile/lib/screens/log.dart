@@ -89,7 +89,7 @@ class _LogScreenState extends State<LogScreen> {
     }).length;
 
     return Scaffold(
-      appBar: AppBar(title: Text(tr('سجل دخول المناطق', 'Area log'), style: const TextStyle(fontWeight: FontWeight.w800))),
+      appBar: AppBar(title: Text(tr('إشعارات', 'Notifications'), style: const TextStyle(fontWeight: FontWeight.w800))),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 24), children: [

@@ -18,7 +18,7 @@ perms = [
     "POST_NOTIFICATIONS", "USE_FULL_SCREEN_INTENT", "VIBRATE", "WAKE_LOCK", "RECEIVE_BOOT_COMPLETED",
     "ACCESS_NOTIFICATION_POLICY", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "CAMERA",
     "BLUETOOTH", "BLUETOOTH_CONNECT", "SYSTEM_ALERT_WINDOW",
-    "FOREGROUND_SERVICE_SPECIAL_USE", "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+    "FOREGROUND_SERVICE_SPECIAL_USE", "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", "USE_BIOMETRIC",
 ]
 block = "\n".join(f'    <uses-permission android:name="android.permission.{p}"/>' for p in perms if f"permission.{p}\"" not in m)
 m = m.replace("<application", block + "\n    <application", 1)
@@ -53,13 +53,19 @@ if kts:
     g = re.sub(r"compileOptions\s*\{", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", g, count=1)
     g = g.replace('signingConfig = signingConfigs.getByName("debug")',
                   'signingConfig = signingConfigs.getByName("debug")\n            isMinifyEnabled = false\n            isShrinkResources = false')
-    g += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+    g += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n    implementation("androidx.appcompat:appcompat:1.7.0")\n}\n'
 else:
     g = re.sub(r"compileOptions\s*\{", "compileOptions {\n        coreLibraryDesugaringEnabled true", g, count=1)
     g = g.replace("signingConfig = signingConfigs.debug",
                   "signingConfig = signingConfigs.debug\n            minifyEnabled false\n            shrinkResources false")
-    g += "\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}\n"
+    g += "\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n    implementation 'androidx.appcompat:appcompat:1.7.0'\n}\n"
 bf.write_text(g)
+
+# ── AppCompat themes (local_auth's biometric prompt needs them on Android ≤ 8) ──
+for sty in (app / "src/main/res").glob("values*/styles.xml"):
+    t = sty.read_text()
+    t = re.sub(r'parent="@android:style/Theme\.[^"]*"', 'parent="Theme.AppCompat.DayNight.NoActionBar"', t)
+    sty.write_text(t)
 
 # ── Toolchain versions (AGP 8.7 / Kotlin 2.1 / Gradle 8.12) ──
 for name in ("settings.gradle", "settings.gradle.kts"):
