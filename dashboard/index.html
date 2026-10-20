@@ -36,11 +36,19 @@ header.top img{width:34px;height:34px;border-radius:50%}
 header.top h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
 header.top .sp{flex:1}
 header.top .who{font-size:13px;opacity:.9;direction:ltr}
-nav.tabs{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:58px;z-index:4}
+nav.tabs{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:var(--hdr,58px);z-index:4}
 nav.tabs .wrap{display:flex;gap:4px;overflow-x:auto;padding-block:6px}
 nav.tabs button{border:0;background:none;color:var(--muted);font:600 14px var(--f-ui);padding:9px 14px;border-radius:8px;white-space:nowrap;cursor:pointer}
 nav.tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
 main{padding-block:22px 60px}
+@media (max-width:640px){
+  header.top .who{display:none}
+  header.top h1{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  header.top h1 .long{display:none}
+  header.top .wrap{gap:8px}
+  .btn.sm{padding:5px 8px;font-size:12.5px;white-space:nowrap}
+  .people-row{grid-template-columns:78px 72px minmax(0,1fr) 28px}
+}
 .grid2{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:20px;align-items:start}
 @media (max-width:860px){.grid2{grid-template-columns:minmax(0,1fr)}}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;min-width:0}
@@ -117,10 +125,10 @@ svg.spark{width:100%;height:120px;display:block}
 <div id="appView" hidden>
   <header class="top"><div class="wrap">
     <img src="icon.png" alt="">
-    <h1>Marine Operations · لوحة الإدخال</h1>
+    <h1>لوحة الإدخال<span class="long"> · Marine Operations</span></h1>
     <span class="sp"></span>
     <span class="who" id="who"></span>
-    <button class="btn sm" id="pwBtn">تغيير كلمة المرور</button>
+    <button class="btn sm" id="pwBtn">كلمة المرور</button>
     <button class="btn sm" id="outBtn">خروج</button>
   </div></header>
   <nav class="tabs"><div class="wrap" role="tablist">
@@ -338,7 +346,9 @@ let started=false;
 function show(session){
   $("#loginView").hidden = !!session;
   $("#appView").hidden = !session;
-  if (session){ $("#who").textContent = session.user.email; if(!started){ started=true; openTab("weather"); } }
+  if (session){ $("#who").textContent = session.user.email;
+    requestAnimationFrame(()=>document.documentElement.style.setProperty("--hdr", $("header.top").offsetHeight+"px"));
+    if(!started){ started=true; openTab("weather"); } }
   else started=false;
 }
 $("#loginForm").addEventListener("submit", async e=>{

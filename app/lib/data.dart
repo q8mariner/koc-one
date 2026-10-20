@@ -123,7 +123,7 @@ class Contact {
 
 class Repo {
   static Future<List<OpsMonth>> operations() async {
-    final rows = await db.from('operations').select().order('month');
+    final rows = await db.from('operations').select().order('month', ascending: true);
     return [
       for (final r in rows)
         OpsMonth(parseDay(r['month'])!, (r['count'] as num).toInt()),
@@ -133,7 +133,7 @@ class Repo {
   /// Today's forecast first, then the following days. Falls back to the most recent entry.
   static Future<List<Weather>> weather() async {
     final today = ymd(DateTime.now());
-    final rows = await db.from('weather').select().gte('day', today).order('day').limit(7);
+    final rows = await db.from('weather').select().gte('day', today).order('day', ascending: true).limit(7);
     if (rows.isNotEmpty) return rows.map(Weather.fromRow).toList();
     final last = await db.from('weather').select().order('day', ascending: false).limit(1);
     return last.map(Weather.fromRow).toList();
@@ -154,7 +154,7 @@ class Repo {
   }
 
   static Future<List<Contact>> contacts() async {
-    final rows = await db.from('contacts').select().order('sort').order('name');
+    final rows = await db.from('contacts').select().order('sort', ascending: true).order('name', ascending: true);
     return [
       for (final r in rows)
         Contact((r['name'] ?? '').toString(), (r['role'] ?? '').toString(), (r['phone'] ?? '').toString()),
