@@ -3,3 +3,7 @@ app/build/
 app/.dart_tool/
 app/.metadata
 app/*.log
+node_modules/
+shots/
+preview-shots.zip
+app/web/

@@ -49,8 +49,11 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> {
-  Section current = Section.home;
-  bool menuOpen = false;
+  // `?s=weather` opens a section directly (used by the web preview check).
+  Section current = Section.values.firstWhere(
+      (s) => s.name == Uri.base.queryParameters['s'],
+      orElse: () => Section.home);
+  bool menuOpen = Uri.base.queryParameters['menu'] == '1';
   int refreshTick = 0;
 
   void go(Section s) => setState(() {

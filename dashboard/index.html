@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Marine Ops Dashboard</title>
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: sticky top bar + horizontal section tabs; each section is a two-pane editor (form | list) that stacks on phones */
+:root{
+  --bg:#EEF2FA; --surface:#FFFFFF; --sunk:#E3E9F6; --line:#D3DCEE;
+  --fg:#16203A; --muted:#5D6886; --accent:#1F5FFF; --accent-ink:#FFFFFF; --accent-soft:#DCE6FF;
+  --ok:#11845B; --warn:#B26A00; --bad:#C2303A;
+  --f-ui:"IBM Plex Sans Arabic",system-ui,"Segoe UI",Tahoma,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0C1222; --surface:#141C31; --sunk:#0F172A; --line:#26314D;
+  --fg:#E6EBF7; --muted:#97A3C2; --accent:#5C8BFF; --accent-ink:#081127; --accent-soft:#1B2A52;
+  --ok:#3CC48F; --warn:#E3A43C; --bad:#F06A73; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0C1222; --surface:#141C31; --sunk:#0F172A; --line:#26314D;
+  --fg:#E6EBF7; --muted:#97A3C2; --accent:#5C8BFF; --accent-ink:#081127; --accent-soft:#1B2A52;
+  --ok:#3CC48F; --warn:#E3A43C; --bad:#F06A73; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--f-ui)}
+[hidden]{display:none!important}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:0;z-index:5;background:var(--accent);color:var(--accent-ink)}
+header.top .wrap{display:flex;align-items:center;gap:14px;padding-block:12px}
+header.top img{width:34px;height:34px;border-radius:50%}
+header.top h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+header.top .sp{flex:1}
+header.top .who{font-size:13px;opacity:.9;direction:ltr}
+nav.tabs{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:58px;z-index:4}
+nav.tabs .wrap{display:flex;gap:4px;overflow-x:auto;padding-block:6px}
+nav.tabs button{border:0;background:none;color:var(--muted);font:600 14px var(--f-ui);padding:9px 14px;border-radius:8px;white-space:nowrap;cursor:pointer}
+nav.tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
+main{padding-block:22px 60px}
+.grid2{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;min-width:0}
+.panel h2{font-size:16px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+.panel h2 small{font-weight:500;color:var(--muted);font-size:13px}
+.hint{color:var(--muted);font-size:13px;margin:-6px 0 14px}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px;font-weight:500}
+input,select,textarea{width:100%;font:15px var(--f-ui);color:var(--fg);background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+textarea{min-height:90px;resize:vertical}
+.ltr{direction:ltr;text-align:left}
+.row{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:12px}
+.field{margin-bottom:12px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 14px var(--f-ui);padding:9px 16px;border-radius:8px;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.55;cursor:default}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:start;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:500;font-size:12.5px}
+td.num,th.num{text-align:end;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.chip{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-weight:600}
+.stat{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px}
+.stat div{background:var(--sunk);border-radius:8px;padding:10px 14px}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--muted)}
+svg.spark{width:100%;height:120px;display:block}
+.news-item{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.news-item img{width:96px;height:64px;object-fit:cover;border-radius:6px;background:var(--sunk)}
+.news-item p{margin:0;font-weight:600;font-size:14px;direction:ltr;text-align:left;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.news-item small{color:var(--muted)}
+.preview{width:100%;max-height:180px;object-fit:cover;border-radius:8px;margin-top:8px;background:var(--sunk)}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;direction:ltr}
+.cal .h{font-size:12px;color:var(--muted);text-align:center}
+.cal button{border:1px solid var(--line);background:var(--sunk);border-radius:6px;padding:6px 2px;font:13px var(--f-ui);color:var(--fg);cursor:pointer;min-height:48px;display:flex;flex-direction:column;align-items:center;gap:1px}
+.cal button.out{opacity:.4}
+.cal button.has{background:var(--accent-soft)}
+.cal button.sel{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.cal button small{font-size:10.5px;font-family:var(--f-mono)}
+.calnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.calnav b{font-size:16px}
+.people-row{display:grid;grid-template-columns:90px 100px minmax(0,1fr) 34px;gap:6px;margin-bottom:6px}
+.people-row input,.people-row select{padding:7px 8px;font-size:14px}
+.x{border:0;background:none;color:var(--bad);font-size:20px;cursor:pointer}
+.toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:8px;font-weight:600;z-index:20;max-width:90vw}
+.toast.err{background:var(--bad);color:#fff}
+.login{max-width:380px;margin:9vh auto 0}
+.login .brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.login .brand img{width:52px;height:52px;border-radius:50%}
+.login .brand h1{font-size:20px;margin:0}
+.err-msg{color:var(--bad);font-size:13.5px;min-height:20px}
+.split{display:flex;gap:6px;align-items:center}
+.empty{color:var(--muted);text-align:center;padding:26px 8px}
+</style>
+</head>
+<body>
+
+<section id="loginView" class="wrap" hidden>
+  <div class="login panel">
+    <div class="brand"><img src="icon.png" alt=""><div><h1>لوحة إدخال البيانات</h1><div class="hint" style="margin:0">Marine Operations</div></div></div>
+    <form id="loginForm">
+      <div class="field"><label for="lEmail">البريد الإلكتروني</label><input id="lEmail" type="email" class="ltr" autocomplete="username" required></div>
+      <div class="field"><label for="lPass">كلمة المرور</label><input id="lPass" type="password" class="ltr" autocomplete="current-password" required></div>
+      <div class="err-msg" id="lErr"></div>
+      <button class="btn primary" style="width:100%" id="lBtn">دخول</button>
+    </form>
+  </div>
+</section>
+
+<div id="appView" hidden>
+  <header class="top"><div class="wrap">
+    <img src="icon.png" alt="">
+    <h1>Marine Operations · لوحة الإدخال</h1>
+    <span class="sp"></span>
+    <span class="who" id="who"></span>
+    <button class="btn sm" id="pwBtn">تغيير كلمة المرور</button>
+    <button class="btn sm" id="outBtn">خروج</button>
+  </div></header>
+  <nav class="tabs"><div class="wrap" role="tablist">
+    <button data-tab="weather" aria-selected="true">الطقس والمد والجزر</button>
+    <button data-tab="duty">جدول المناوبات</button>
+    <button data-tab="news">الأخبار</button>
+    <button data-tab="ops">العمليات</button>
+    <button data-tab="contacts">أرقام 24 ساعة</button>
+  </div></nav>
+
+  <main class="wrap">
+    <!-- WEATHER -->
+    <section data-pane="weather">
+      <div class="grid2">
+        <form class="panel" id="wxForm">
+          <h2>بيانات يوم <small>تظهر في التطبيق كـ Today / Tomorrow</small></h2>
+          <div class="row">
+            <div><label for="wxDay">التاريخ</label><input id="wxDay" type="date" required></div>
+            <div><label for="wxCond">الحالة</label>
+              <select id="wxCond">
+                <option value="sunny">مشمس</option><option value="partly_cloudy">غائم جزئيًا</option>
+                <option value="cloudy">غائم</option><option value="rain_sun">مطر مع شمس</option>
+                <option value="rain">ممطر</option><option value="storm">عاصفة رعدية</option>
+                <option value="dust">غبار</option><option value="fog">ضباب</option>
+              </select></div>
+          </div>
+          <div class="row">
+            <div><label for="wxTemp">الحرارة °C</label><input id="wxTemp" type="number" step="0.1" class="ltr"></div>
+            <div><label for="wxWind">الرياح km/h</label><input id="wxWind" type="number" step="0.1" class="ltr"></div>
+            <div><label for="wxDir">الاتجاه</label>
+              <select id="wxDir" class="ltr">
+                <option>N</option><option>NNE</option><option>NE</option><option>ENE</option><option>E</option><option>ESE</option><option>SE</option><option>SSE</option>
+                <option selected>S</option><option>SSW</option><option>SW</option><option>WSW</option><option>W</option><option>WNW</option><option>NW</option><option>NNW</option>
+              </select></div>
+            <div><label for="wxHum">الرطوبة %</label><input id="wxHum" type="number" min="0" max="100" class="ltr"></div>
+          </div>
+          <label>المد والجزر (الارتفاع بالمتر · الوقت)</label>
+          <div class="scroll"><table>
+            <tbody>
+              <tr><td>1st High Tide</td><td><input id="h1m" type="number" step="0.1" class="ltr" placeholder="m"></td><td><input id="h1t" type="time" class="ltr"></td></tr>
+              <tr><td>2nd High Tide</td><td><input id="h2m" type="number" step="0.1" class="ltr" placeholder="m"></td><td><input id="h2t" type="time" class="ltr"></td></tr>
+              <tr><td>1st Low Tide</td><td><input id="l1m" type="number" step="0.1" class="ltr" placeholder="m"></td><td><input id="l1t" type="time" class="ltr"></td></tr>
+              <tr><td>2nd Low Tide</td><td><input id="l2m" type="number" step="0.1" class="ltr" placeholder="m"></td><td><input id="l2t" type="time" class="ltr"></td></tr>
+            </tbody>
+          </table></div>
+          <div class="field" style="margin-top:12px"><label for="wxSD">حالة الطقس — By Day</label><textarea id="wxSD" class="ltr"></textarea></div>
+          <div class="field"><label for="wxSN">حالة الطقس — By Night</label><textarea id="wxSN" class="ltr"></textarea></div>
+          <div class="btns">
+            <button class="btn primary">حفظ</button>
+            <button type="button" class="btn" id="wxCopy">نسخ من اليوم السابق</button>
+            <button type="button" class="btn danger" id="wxDel">حذف هذا اليوم</button>
+          </div>
+        </form>
+        <div class="panel">
+          <h2>الأيام المُدخلة</h2>
+          <div class="scroll"><table id="wxTable"><thead><tr><th>التاريخ</th><th class="num">°C</th><th>الرياح</th><th class="num">الرطوبة</th><th>المد العالي</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DUTY -->
+    <section data-pane="duty" hidden>
+      <div class="grid2">
+        <div class="panel">
+          <div class="calnav">
+            <button class="btn sm" id="calPrev">‹ السابق</button>
+            <b id="calTitle"></b>
+            <button class="btn sm" id="calNext">التالي ›</button>
+          </div>
+          <div class="cal" id="cal"></div>
+          <p class="hint" style="margin:12px 0 0">الأيام الملوّنة لها جدول. اختر يومًا لتعديله.</p>
+        </div>
+        <div>
+          <form class="panel" id="dutyForm">
+            <h2>مناوبة يوم <small id="dutyDayLbl" class="mono"></small></h2>
+            <div class="row">
+              <div><label for="dM">Morning Shift</label><input id="dM" class="ltr" maxlength="6"></div>
+              <div><label for="dN">Night Shift</label><input id="dN" class="ltr" maxlength="6"></div>
+            </div>
+            <label>الأشخاص (المناوبة · الوظيفة · الاسم)</label>
+            <div id="people"></div>
+            <div class="btns">
+              <button type="button" class="btn sm" id="addPerson">+ إضافة شخص</button>
+            </div>
+            <div class="btns" style="margin-top:14px">
+              <button class="btn primary">حفظ اليوم</button>
+              <button type="button" class="btn danger" id="dutyDel">حذف اليوم</button>
+            </div>
+          </form>
+          <form class="panel" id="bulkForm" style="margin-top:20px">
+            <h2>تعبئة فترة كاملة</h2>
+            <p class="hint">ينسخ أسماء اليوم المختار إلى كل أيام الفترة، ويدوّر حروف المناوبات بالترتيب.</p>
+            <div class="row">
+              <div><label for="bFrom">من</label><input id="bFrom" type="date" required></div>
+              <div><label for="bTo">إلى</label><input id="bTo" type="date" required></div>
+            </div>
+            <div class="row">
+              <div><label for="bM">تدوير Morning</label><input id="bM" class="ltr" value="A,B,C,D"></div>
+              <div><label for="bN">تدوير Night</label><input id="bN" class="ltr" value="B,C,D,A"></div>
+            </div>
+            <button class="btn primary">تطبيق على الفترة</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEWS -->
+    <section data-pane="news" hidden>
+      <div class="grid2">
+        <form class="panel" id="newsForm">
+          <h2 id="newsFormTitle">خبر جديد</h2>
+          <div class="field"><label for="nTitle">العنوان</label><textarea id="nTitle" class="ltr" style="min-height:60px" required></textarea></div>
+          <div class="field"><label for="nBody">التفاصيل</label><textarea id="nBody" class="ltr" style="min-height:160px"></textarea></div>
+          <div class="row">
+            <div><label for="nUnit">الوحدة</label><input id="nUnit" class="ltr" list="units" placeholder="POT"></div>
+            <div><label for="nDate">التاريخ</label><input id="nDate" type="date"></div>
+          </div>
+          <datalist id="units"><option>POT</option><option>MOSM</option><option>FMT</option></datalist>
+          <div class="field"><label for="nImg">الصورة</label><input id="nImg" type="file" accept="image/*">
+            <img id="nPrev" class="preview" alt="" hidden></div>
+          <div class="btns">
+            <button class="btn primary" id="nSave">نشر</button>
+            <button type="button" class="btn" id="nNew" hidden>إلغاء التعديل</button>
+          </div>
+        </form>
+        <div class="panel">
+          <h2>الأخبار المنشورة</h2>
+          <div id="newsList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPERATIONS -->
+    <section data-pane="ops" hidden>
+      <div class="grid2">
+        <form class="panel" id="opsForm">
+          <h2>عدد العمليات لشهر</h2>
+          <div class="row">
+            <div><label for="oMonth">الشهر</label><input id="oMonth" type="month" required></div>
+            <div><label for="oCount">العدد</label><input id="oCount" type="number" min="0" class="ltr" required></div>
+          </div>
+          <button class="btn primary">حفظ</button>
+          <p class="hint" style="margin:12px 0 0">إذا كان الشهر موجودًا يُستبدل عدده.</p>
+        </form>
+        <div class="panel">
+          <div class="stat" id="opsStat"></div>
+          <svg class="spark" id="opsSpark" viewBox="0 0 600 120" preserveAspectRatio="none" aria-label="منحنى العمليات"></svg>
+          <div class="scroll"><table id="opsTable"><thead><tr><th>الشهر</th><th class="num">العدد</th><th></th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACTS -->
+    <section data-pane="contacts" hidden>
+      <div class="grid2">
+        <form class="panel" id="cForm">
+          <h2 id="cFormTitle">رقم جديد</h2>
+          <div class="field"><label for="cName">الاسم / الجهة</label><input id="cName" class="ltr" required></div>
+          <div class="row">
+            <div><label for="cRole">الوصف</label><input id="cRole" class="ltr" placeholder="Marine Control Room"></div>
+            <div><label for="cPhone">الهاتف</label><input id="cPhone" class="ltr" inputmode="tel" required></div>
+            <div><label for="cSort">الترتيب</label><input id="cSort" type="number" class="ltr" value="0"></div>
+          </div>
+          <div class="btns">
+            <button class="btn primary">حفظ</button>
+            <button type="button" class="btn" id="cNew" hidden>إلغاء التعديل</button>
+          </div>
+        </form>
+        <div class="panel">
+          <h2>أرقام الطوارئ 24 ساعة</h2>
+          <div class="scroll"><table id="cTable"><thead><tr><th>الاسم</th><th>الوصف</th><th>الهاتف</th><th class="num">#</th><th></th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL = "https://utbjgzkrjwsikznrkjbh.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0YmpnemtyandzaWt6bnJramJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1MTg2ODIsImV4cCI6MjEwODA5NDY4Mn0.D6OmMDFwOkeKuJa5Gp1ayTXph3_IbrCSWXZ_GxTsGNs";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseYmd = s => { const [y,m,d] = s.slice(0,10).split("-").map(Number); return new Date(y,m-1,d); };
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const numOrNull = v => v === "" || v == null ? null : Number(v);
+
+let toastT;
+function toast(msg, err=false){
+  const t=$("#toast"); t.textContent=msg; t.className="toast"+(err?" err":""); t.hidden=false;
+  clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true, err?5000:2200);
+}
+function fail(e){ console.error(e); toast(friendly(e), true); }
+function friendly(e){
+  const m = (e && (e.message||e.error_description)) || String(e);
+  if (/row-level security|permission|42501/i.test(m)) return "هذا الحساب غير مخوّل بالتعديل. أضف بريده إلى جدول admins.";
+  if (/Failed to fetch|NetworkError/i.test(m)) return "تعذّر الاتصال بالخادم. تحقق من الإنترنت.";
+  return m;
+}
+async function q(p){ const {data,error} = await p; if (error) throw error; return data; }
+
+// ───── Auth ─────
+async function boot(){
+  const { data:{ session } } = await sb.auth.getSession();
+  show(session);
+  sb.auth.onAuthStateChange((_e, s) => show(s));
+}
+let started=false;
+function show(session){
+  $("#loginView").hidden = !!session;
+  $("#appView").hidden = !session;
+  if (session){ $("#who").textContent = session.user.email; if(!started){ started=true; openTab("weather"); } }
+  else started=false;
+}
+$("#loginForm").addEventListener("submit", async e=>{
+  e.preventDefault(); $("#lErr").textContent=""; $("#lBtn").disabled=true;
+  const { error } = await sb.auth.signInWithPassword({ email:$("#lEmail").value.trim(), password:$("#lPass").value });
+  $("#lBtn").disabled=false;
+  if (error) $("#lErr").textContent = /Invalid login/i.test(error.message) ? "البريد أو كلمة المرور غير صحيحة." : friendly(error);
+});
+$("#outBtn").onclick = () => sb.auth.signOut();
+$("#pwBtn").onclick = async () => {
+  const box = document.createElement("form"); box.className="panel"; box.style.cssText="position:fixed;inset:auto 0 0 0;margin:auto;top:20vh;max-width:360px;z-index:30;box-shadow:0 20px 60px #0005";
+  box.innerHTML = `<h2>كلمة مرور جديدة</h2><div class="field"><input id="np" type="password" class="ltr" minlength="8" required autocomplete="new-password"></div><div class="btns"><button class="btn primary">حفظ</button><button type="button" class="btn" id="npC">إلغاء</button></div>`;
+  document.body.append(box); box.querySelector("#np").focus();
+  box.querySelector("#npC").onclick = () => box.remove();
+  box.onsubmit = async e => { e.preventDefault();
+    const { error } = await sb.auth.updateUser({ password: box.querySelector("#np").value });
+    if (error) return fail(error); box.remove(); toast("تم تغيير كلمة المرور"); };
+};
+
+// ───── Tabs ─────
+const loaders = {};
+function openTab(name){
+  $$("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab===name));
+  $$("section[data-pane]").forEach(s => s.hidden = s.dataset.pane!==name);
+  loaders[name]?.();
+}
+$$("nav.tabs button").forEach(b => b.onclick = () => openTab(b.dataset.tab));
+
+// ───── Weather ─────
+const WX_FIELDS = {temp_c:"#wxTemp",condition:"#wxCond",wind_kmh:"#wxWind",wind_dir:"#wxDir",humidity:"#wxHum",
+  high1_m:"#h1m",high1_time:"#h1t",high2_m:"#h2m",high2_time:"#h2t",low1_m:"#l1m",low1_time:"#l1t",low2_m:"#l2m",low2_time:"#l2t",
+  state_day:"#wxSD",state_night:"#wxSN"};
+const WX_NUM = new Set(["temp_c","wind_kmh","humidity","high1_m","high2_m","low1_m","low2_m"]);
+let wxRows = [];
+function fillWx(r, keepDay){
+  for (const [k,sel] of Object.entries(WX_FIELDS)){
+    const el=$(sel); let v = r ? r[k] : null;
+    if (k==="condition" && v==null) v="rain_sun";
+    if (k==="wind_dir" && v==null) v="S";
+    el.value = v ?? "";
+  }
+}
+async function loadWx(){
+  wxRows = await q(sb.from("weather").select("*").order("day",{ascending:false}).limit(60));
+  const tb=$("#wxTable tbody");
+  tb.innerHTML = wxRows.length ? wxRows.map(r=>`<tr data-day="${r.day}" style="cursor:pointer">
+    <td class="mono">${r.day}${r.day===ymd(new Date())?' <span class="chip">اليوم</span>':''}</td>
+    <td class="num">${r.temp_c ?? "–"}</td><td class="ltr">${r.wind_kmh ?? "–"} ${esc(r.wind_dir||"")}</td>
+    <td class="num">${r.humidity ?? "–"}%</td><td class="mono ltr">${esc(r.high1_time||"")} ${esc(r.high2_time||"")}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="empty">لا توجد بيانات بعد</td></tr>`;
+  tb.querySelectorAll("tr[data-day]").forEach(tr => tr.onclick = () => { $("#wxDay").value = tr.dataset.day; pickWx(); });
+  if (!$("#wxDay").value) $("#wxDay").value = ymd(new Date());
+  pickWx();
+}
+function pickWx(){ fillWx(wxRows.find(r=>r.day===$("#wxDay").value) || null); }
+loaders.weather = () => loadWx().catch(fail);
+$("#wxDay").addEventListener("change", async ()=>{
+  if (!wxRows.find(r=>r.day===$("#wxDay").value)){
+    try{ const r = await q(sb.from("weather").select("*").eq("day",$("#wxDay").value).maybeSingle()); fillWx(r); }catch(e){fail(e)}
+  } else pickWx();
+});
+$("#wxCopy").onclick = async () => {
+  const d = $("#wxDay").value; if(!d) return;
+  try{
+    const r = await q(sb.from("weather").select("*").lt("day",d).order("day",{ascending:false}).limit(1).maybeSingle());
+    if (!r) return toast("لا يوجد يوم سابق للنسخ منه", true);
+    fillWx(r); toast("تم النسخ من "+r.day+" — عدّل ثم احفظ");
+  }catch(e){fail(e)}
+};
+$("#wxForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const row = { day:$("#wxDay").value, updated_at:new Date().toISOString() };
+  for (const [k,sel] of Object.entries(WX_FIELDS)){ const v=$(sel).value.trim(); row[k] = WX_NUM.has(k) ? numOrNull(v) : (v||null); }
+  try{ await q(sb.from("weather").upsert(row)); toast("تم حفظ "+row.day); loadWx(); }catch(e){fail(e)}
+});
+$("#wxDel").onclick = () => confirmBtn($("#wxDel"), async ()=>{
+  try{ await q(sb.from("weather").delete().eq("day",$("#wxDay").value)); toast("تم الحذف"); fillWx(null); loadWx(); }catch(e){fail(e)}
+});
+
+// two-step confirm inside the button (no browser dialogs)
+function confirmBtn(btn, action){
+  if (btn.dataset.armed){ delete btn.dataset.armed; btn.textContent=btn.dataset.label; action(); return; }
+  btn.dataset.label = btn.textContent; btn.dataset.armed="1"; btn.textContent="اضغط مرة أخرى للتأكيد";
+  setTimeout(()=>{ if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent=btn.dataset.label; } }, 3500);
+}
+
+// ───── Duty ─────
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let selDay = ymd(new Date());
+let dutyMap = {};
+const ROLES = ["P.C.","PFSO","OS","MMT"];
+function gridStart(m){ const d=new Date(m); d.setDate(1 - d.getDay()); return d; }
+async function loadDuty(){
+  const s = gridStart(calMonth), e = new Date(s); e.setDate(s.getDate()+41);
+  const rows = await q(sb.from("duty").select("*").gte("day",ymd(s)).lte("day",ymd(e)));
+  dutyMap = Object.fromEntries(rows.map(r=>[r.day,r]));
+  renderCal(); pickDuty();
+}
+function renderCal(){
+  $("#calTitle").textContent = MONTHS[calMonth.getMonth()]+" "+calMonth.getFullYear();
+  const s = gridStart(calMonth); let h = ["S","M","T","W","T","F","S"].map(x=>`<div class="h">${x}</div>`).join("");
+  for (let i=0;i<42;i++){
+    const d=new Date(s); d.setDate(s.getDate()+i); const k=ymd(d); const r=dutyMap[k];
+    if (i===35 && d.getMonth()!==calMonth.getMonth()) break;
+    h += `<button type="button" data-d="${k}" class="${d.getMonth()!==calMonth.getMonth()?'out ':''}${r?'has ':''}${k===selDay?'sel':''}">
+      <span>${pad(d.getDate())}</span><small>${r?esc((r.morning_shift||"-")+"/"+(r.night_shift||"-")):"&nbsp;"}</small></button>`;
+  }
+  $("#cal").innerHTML = h;
+  $$("#cal button").forEach(b=>b.onclick=()=>{ selDay=b.dataset.d; renderCal(); pickDuty(); });
+}
+function personRow(p={shift:"M",role:"",name:""}){
+  const div=document.createElement("div"); div.className="people-row";
+  div.innerHTML = `<select class="ltr" aria-label="shift"><option value="M">Morning</option><option value="N">Night</option></select>
+    <input class="ltr" list="roles" aria-label="role" placeholder="Role">
+    <input class="ltr" aria-label="name" placeholder="Name">
+    <button type="button" class="x" aria-label="حذف">×</button>`;
+  const [sh,ro,na] = div.querySelectorAll("select,input");
+  sh.value = (p.shift||"M").toUpperCase()==="N"?"N":"M"; ro.value=p.role||""; na.value=p.name||"";
+  div.querySelector(".x").onclick=()=>div.remove();
+  $("#people").append(div);
+}
+function pickDuty(){
+  $("#dutyDayLbl").textContent = selDay;
+  const r = dutyMap[selDay];
+  $("#dM").value = r?.morning_shift||""; $("#dN").value = r?.night_shift||"";
+  $("#people").innerHTML="";
+  const ppl = r?.people?.length ? r.people : lastPeople();
+  ppl.forEach(p=>personRow(p));
+  if (!ppl.length) ROLES.forEach(role=>personRow({shift:"M",role}));
+  if (!$("#bFrom").value) $("#bFrom").value = selDay;
+}
+function lastPeople(){
+  const ks = Object.keys(dutyMap).filter(k=>k<selDay).sort(); const k = ks[ks.length-1];
+  return k ? dutyMap[k].people||[] : [];
+}
+function readPeople(){
+  return $$("#people .people-row").map(r=>{ const [sh,ro,na]=r.querySelectorAll("select,input"); return {shift:sh.value,role:ro.value.trim(),name:na.value.trim()}; }).filter(p=>p.name||p.role);
+}
+document.body.insertAdjacentHTML("beforeend", `<datalist id="roles">${ROLES.map(r=>`<option>${r}</option>`).join("")}</datalist>`);
+$("#addPerson").onclick = () => personRow();
+$("#calPrev").onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()-1, 1); loadDuty().catch(fail); };
+$("#calNext").onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+1, 1); loadDuty().catch(fail); };
+loaders.duty = () => loadDuty().catch(fail);
+$("#dutyForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const row = { day:selDay, morning_shift:$("#dM").value.trim()||null, night_shift:$("#dN").value.trim()||null, people:readPeople(), updated_at:new Date().toISOString() };
+  try{ await q(sb.from("duty").upsert(row)); toast("تم حفظ "+selDay); loadDuty(); }catch(e){fail(e)}
+});
+$("#dutyDel").onclick = () => confirmBtn($("#dutyDel"), async ()=>{
+  try{ await q(sb.from("duty").delete().eq("day",selDay)); toast("تم الحذف"); loadDuty(); }catch(e){fail(e)}
+});
+$("#bulkForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const from=parseYmd($("#bFrom").value), to=parseYmd($("#bTo").value);
+  if (to<from) return toast("تاريخ النهاية قبل البداية", true);
+  const days = Math.round((to-from)/864e5)+1;
+  if (days>400) return toast("الفترة طويلة جدًا (الحد 400 يوم)", true);
+  const ms=$("#bM").value.split(",").map(s=>s.trim()).filter(Boolean), ns=$("#bN").value.split(",").map(s=>s.trim()).filter(Boolean);
+  const people = readPeople(); const rows=[];
+  for (let i=0;i<days;i++){ const d=new Date(from); d.setDate(from.getDate()+i);
+    rows.push({ day:ymd(d), morning_shift:ms.length?ms[i%ms.length]:null, night_shift:ns.length?ns[i%ns.length]:null, people, updated_at:new Date().toISOString() }); }
+  try{ await q(sb.from("duty").upsert(rows)); toast(`تم تعبئة ${days} يوم`); loadDuty(); }catch(e){fail(e)}
+});
+
+// ───── News ─────
+let newsRows=[], editNews=null, newsFile=null;
+async function loadNews(){
+  newsRows = await q(sb.from("news").select("*").order("published_on",{ascending:false}).order("created_at",{ascending:false}));
+  $("#newsList").innerHTML = newsRows.length ? newsRows.map(n=>`<div class="news-item">
+      <img src="${esc(n.image_url||"")}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div style="min-width:0"><p>${esc(n.title)}</p><small><span class="chip">${esc(n.unit||"—")}</span> <span class="mono">${esc(n.published_on||"")}</span></small></div>
+      <div class="btns" style="margin:0"><button class="btn sm" data-edit="${n.id}">تعديل</button><button class="btn sm danger" data-del="${n.id}">حذف</button></div>
+    </div>`).join("") : `<div class="empty">لا توجد أخبار بعد</div>`;
+  $$("[data-edit]").forEach(b=>b.onclick=()=>startEditNews(newsRows.find(n=>n.id===b.dataset.edit)));
+  $$("[data-del]").forEach(b=>b.onclick=()=>confirmBtn(b, async ()=>{ try{ await q(sb.from("news").delete().eq("id",b.dataset.del)); toast("تم حذف الخبر"); loadNews(); }catch(e){fail(e)} }));
+}
+function resetNews(){
+  editNews=null; newsFile=null; $("#newsForm").reset(); $("#nDate").value=ymd(new Date());
+  $("#nPrev").hidden=true; $("#newsFormTitle").textContent="خبر جديد"; $("#nSave").textContent="نشر"; $("#nNew").hidden=true;
+}
+function startEditNews(n){
+  editNews=n; newsFile=null; $("#nTitle").value=n.title||""; $("#nBody").value=n.body||""; $("#nUnit").value=n.unit||""; $("#nDate").value=n.published_on||"";
+  $("#nImg").value=""; $("#nPrev").src=n.image_url||""; $("#nPrev").hidden=!n.image_url;
+  $("#newsFormTitle").textContent="تعديل خبر"; $("#nSave").textContent="حفظ التعديل"; $("#nNew").hidden=false;
+  $("#newsForm").scrollIntoView({behavior:"smooth",block:"start"});
+}
+$("#nNew").onclick = resetNews;
+$("#nImg").onchange = () => { newsFile=$("#nImg").files[0]||null; if(newsFile){ $("#nPrev").src=URL.createObjectURL(newsFile); $("#nPrev").hidden=false; } };
+async function shrink(file){
+  // resize big photos to max 1600px JPEG so the app loads them fast
+  const img = await createImageBitmap(file); const s = Math.min(1, 1600/Math.max(img.width,img.height));
+  const c=document.createElement("canvas"); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+  c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+  return await new Promise(r=>c.toBlob(r,"image/jpeg",0.85));
+}
+$("#newsForm").addEventListener("submit", async e=>{
+  e.preventDefault(); $("#nSave").disabled=true;
+  try{
+    let image_url = editNews?.image_url || null;
+    if (newsFile){
+      const blob = await shrink(newsFile).catch(()=>newsFile);
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`;
+      const { error } = await sb.storage.from("news").upload(path, blob, { contentType:"image/jpeg" });
+      if (error) throw error;
+      image_url = sb.storage.from("news").getPublicUrl(path).data.publicUrl;
+    }
+    const row = { title:$("#nTitle").value.trim(), body:$("#nBody").value.trim()||null, unit:$("#nUnit").value.trim()||null, published_on:$("#nDate").value||null, image_url };
+    if (editNews) await q(sb.from("news").update(row).eq("id",editNews.id)); else await q(sb.from("news").insert(row));
+    toast(editNews?"تم حفظ التعديل":"تم نشر الخبر"); resetNews(); loadNews();
+  }catch(e){fail(e)} finally{ $("#nSave").disabled=false; }
+});
+loaders.news = () => { if(!editNews) resetNews(); loadNews().catch(fail); };
+
+// ───── Operations ─────
+async function loadOps(){
+  const rows = await q(sb.from("operations").select("*").order("month"));
+  const total = rows.reduce((a,r)=>a+r.count,0);
+  const first = rows[0] ? parseYmd(rows[0].month) : null;
+  $("#opsStat").innerHTML = `<div><b>${total}</b><span>Total Of Operations</span></div>
+    <div><b>${rows.length}</b><span>شهر مُدخل</span></div>
+    ${first?`<div><b style="font-size:16px;padding-top:8px">${MONTHS[first.getMonth()]} ${first.getFullYear()}</b><span>From (يظهر في التطبيق)</span></div>`:""}`;
+  drawSpark(rows.map(r=>r.count));
+  const tb=$("#opsTable tbody");
+  tb.innerHTML = rows.length ? [...rows].reverse().map(r=>{ const d=parseYmd(r.month); return `<tr>
+    <td>${MONTHS[d.getMonth()]} ${d.getFullYear()}</td><td class="num mono">${r.count}</td>
+    <td class="num"><button class="btn sm" data-oe="${r.month}" data-oc="${r.count}">تعديل</button> <button class="btn sm danger" data-od="${r.month}">حذف</button></td></tr>`; }).join("")
+    : `<tr><td colspan="3" class="empty">لا توجد بيانات بعد</td></tr>`;
+  $$("[data-oe]").forEach(b=>b.onclick=()=>{ $("#oMonth").value=b.dataset.oe.slice(0,7); $("#oCount").value=b.dataset.oc; $("#oCount").focus(); });
+  $$("[data-od]").forEach(b=>b.onclick=()=>confirmBtn(b, async ()=>{ try{ await q(sb.from("operations").delete().eq("month",b.dataset.od)); toast("تم الحذف"); loadOps(); }catch(e){fail(e)} }));
+}
+function drawSpark(v){
+  const svg=$("#opsSpark"); if (v.length<2){ svg.innerHTML=""; return; }
+  const W=600,H=120,mx=Math.max(...v),mn=Math.min(...v),rg=(mx-mn)||1;
+  const pts=v.map((y,i)=>[W*i/(v.length-1), H-6-(y-mn)/rg*(H-12)]);
+  let d=`M${pts[0][0]},${pts[0][1]}`;
+  for(let i=0;i<pts.length-1;i++){ const p0=pts[i-1]||pts[i],p1=pts[i],p2=pts[i+1],p3=pts[i+2]||p2;
+    d+=` C${p1[0]+(p2[0]-p0[0])/6},${p1[1]+(p2[1]-p0[1])/6} ${p2[0]-(p3[0]-p1[0])/6},${p2[1]-(p3[1]-p1[1])/6} ${p2[0]},${p2[1]}`; }
+  const last=pts[pts.length-1];
+  svg.innerHTML=`<path d="${d} L${W},${H} L0,${H} Z" fill="var(--accent-soft)" stroke="none"/><path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2.5" vector-effect="non-scaling-stroke"/><circle cx="${last[0]-3}" cy="${last[1]}" r="4" fill="var(--accent)"/>`;
+}
+$("#opsForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const row={ month:$("#oMonth").value+"-01", count:Number($("#oCount").value), updated_at:new Date().toISOString() };
+  try{ await q(sb.from("operations").upsert(row)); toast("تم الحفظ"); $("#opsForm").reset(); loadOps(); }catch(e){fail(e)}
+});
+loaders.ops = () => loadOps().catch(fail);
+
+// ───── Contacts ─────
+let cRows=[], editC=null;
+async function loadC(){
+  cRows = await q(sb.from("contacts").select("*").order("sort").order("name"));
+  $("#cTable tbody").innerHTML = cRows.length ? cRows.map(c=>`<tr><td class="ltr">${esc(c.name)}</td><td class="ltr">${esc(c.role||"")}</td><td class="mono ltr">${esc(c.phone)}</td><td class="num">${c.sort??0}</td>
+    <td class="num"><button class="btn sm" data-ce="${c.id}">تعديل</button> <button class="btn sm danger" data-cd="${c.id}">حذف</button></td></tr>`).join("")
+    : `<tr><td colspan="5" class="empty">لا توجد أرقام بعد — أضف أول رقم من النموذج</td></tr>`;
+  $$("[data-ce]").forEach(b=>b.onclick=()=>{ editC=cRows.find(c=>c.id===b.dataset.ce); $("#cName").value=editC.name; $("#cRole").value=editC.role||""; $("#cPhone").value=editC.phone; $("#cSort").value=editC.sort??0; $("#cFormTitle").textContent="تعديل رقم"; $("#cNew").hidden=false; });
+  $$("[data-cd]").forEach(b=>b.onclick=()=>confirmBtn(b, async ()=>{ try{ await q(sb.from("contacts").delete().eq("id",b.dataset.cd)); toast("تم الحذف"); loadC(); }catch(e){fail(e)} }));
+}
+function resetC(){ editC=null; $("#cForm").reset(); $("#cSort").value=0; $("#cFormTitle").textContent="رقم جديد"; $("#cNew").hidden=true; }
+$("#cNew").onclick=resetC;
+$("#cForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const row={ name:$("#cName").value.trim(), role:$("#cRole").value.trim()||null, phone:$("#cPhone").value.trim(), sort:Number($("#cSort").value)||0 };
+  try{ if(editC) await q(sb.from("contacts").update(row).eq("id",editC.id)); else await q(sb.from("contacts").insert(row)); toast("تم الحفظ"); resetC(); loadC(); }catch(e){fail(e)}
+});
+loaders.contacts = () => loadC().catch(fail);
+
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+name: Marine Ops · preview check
+
+on:
+  push:
+    branches: [marine-ops]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.27.4"
+          channel: stable
+          cache: true
+      - name: Build web preview of the app
+        working-directory: app
+        run: |
+          flutter create --platforms=web --project-name marine_ops .
+          flutter pub get
+          flutter build web --release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Screenshots + dashboard write test
+        env:
+          CI_EMAIL: ci-check@marine-ops.test
+          CI_PASS: ${{ github.event.inputs.pass || 'QBuH111NknZa2FUxZxAYHCSq' }}
+        run: |
+          npm i playwright@1.48.2 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          (cd app/build/web && python3 -m http.server 8081 >/dev/null 2>&1 &)
+          (cd dashboard && python3 -m http.server 8082 >/dev/null 2>&1 &)
+          sleep 2
+          node tool/check.mjs http://localhost:8081/ http://localhost:8082/ shots
+          cd shots && zip -q ../preview-shots.zip *
+      - name: Publish screenshots
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: marine-ops-check
+          name: Marine Ops · preview screenshots
+          target_commitish: marine-ops
+          files: preview-shots.zip
+          make_latest: false
