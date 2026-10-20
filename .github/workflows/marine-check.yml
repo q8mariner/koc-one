@@ -1,9 +1,10 @@
 name: Marine Ops · preview check
 
 on:
-  push:
-    branches: [marine-ops]
   workflow_dispatch:
+    inputs:
+      email: {description: 'admin email for the dashboard test', required: true}
+      pass: {description: 'password', required: true}
 
 permissions:
   contents: write
@@ -29,8 +30,8 @@ jobs:
           node-version: "20"
       - name: Screenshots + dashboard write test
         env:
-          CI_EMAIL: ci-check@marine-ops.test
-          CI_PASS: ${{ github.event.inputs.pass || 'QBuH111NknZa2FUxZxAYHCSq' }}
+          CI_EMAIL: ${{ github.event.inputs.email }}
+          CI_PASS: ${{ github.event.inputs.pass }}
         run: |
           npm i playwright@1.48.2 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
