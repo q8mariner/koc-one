@@ -1,0 +1,18 @@
+name: marine_ops
+description: Marine Operations — operations, weather & tides, news, duty roster, 24h contacts.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.8.4
+  url_launcher: ^6.3.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
