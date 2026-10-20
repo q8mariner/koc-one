@@ -462,3 +462,20 @@ alter table public.posts enable row level security;
 create policy "signed-in read posts" on public.posts for select using (auth.uid() is not null);
 create policy "ort writes posts" on public.posts for all using (public.is_ort()) with check (public.is_ort());
 alter publication supabase_realtime add table public.posts;
+
+-- ── Employee cards: NFC cards (UID), e-passports (number + BAC keys in meta) and QR codes ──
+create table if not exists public.employee_cards (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null check (kind in ('nfc', 'passport', 'qr')),
+  value text not null,             -- nfc: UID hex · passport: document number · qr: token or scanned text
+  label text,
+  tech text,                       -- e.g. MIFARE Classic, ISO 7816, USB reader
+  meta jsonb not null default '{}'::jsonb,   -- passport: {dob, exp, name}
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (kind, value)
+);
+create index if not exists employee_cards_user on public.employee_cards(user_id);
+alter table public.employee_cards enable row level security;
+create policy "ort manages employee cards" on public.employee_cards for all using (public.is_ort()) with check (public.is_ort());

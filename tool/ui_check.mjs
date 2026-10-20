@@ -46,6 +46,11 @@ DATA.posts = [
   { id: "po2", kind: "event", title: "تمرين إخلاء شامل — المجمع الإداري", body: "تمرين إخلاء مجدول لجميع مباني المجمع.", event_at: now, location: "MP-1 / MP-3", demo: true, created_at: now },
   { id: "po3", kind: "offer", title: "خصم 20% للموظفين في نادي اللياقة", body: "عند إبراز الهوية الرقمية.", demo: true, created_at: now },
 ];
+DATA.cards = [
+  { id: "c1", user_id: "p0", kind: "nfc", value: "04A2B3C4", tech: "MIFARE Classic · ISO 14443-3A", meta: {} },
+  { id: "c2", user_id: "p0", kind: "qr", value: "a1b2c3d4e5f6a1b2c3d4e5f6", tech: "QR · ONE", meta: {} },
+  { id: "c3", user_id: "p0", kind: "passport", value: "K1234567", tech: "e-Passport (ICAO 9303)", meta: { dob: "1990-01-01", exp: "2030-01-01" } },
+];
 DATA.reports = [{ id: "r1", type: "fire", user_id: "p1", status: "new", created_at: now, photo_paths: ["x"], lat: 29.07, lng: 48.08 }];
 
 async function run(name, viewport, lang, steps) {
@@ -95,6 +100,10 @@ const steps = [
   ["9-reports", S(`s.tab='reports';`)],
   ["10-clear", S(`s.tab='alarms'; st.askClear(s.losses[0]);`)],
   ["11-pm", S(`s.clr=null; s.tab='pm'; st.newPost();`)],
+  ["12-reader", S(`s.postForm=null; s.tab='people'; s.rd.unknown={kind:'nfc', value:'04:11:22:33', tech:'MIFARE Ultralight'};`)],
+  ["13-idcard", S(`s.rd.unknown=null; st.identify({kind:'nfc', value:'04:a2:b3:c4'});`)],
+  ["14-cards", S(`s.idv=null; st.editPerson(s.people.find(p=>p.id==='p0')); st.startLink('passport');`)],
+  ["15-qr", S(`st.showQr(s.cards[1]);`)],
 ];
 await run("phone-ar", { width: 390, height: 844 }, "ar", steps);
 await run("phone-en", { width: 390, height: 844 }, "en", steps.slice(0, 5));

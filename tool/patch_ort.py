@@ -13,9 +13,9 @@ tool = pathlib.Path(__file__).parent
 manifest = app / "src/main/AndroidManifest.xml"
 m = manifest.read_text()
 perms = ["INTERNET", "ACCESS_NETWORK_STATE", "CAMERA", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS",
-         "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "POST_NOTIFICATIONS", "VIBRATE", "USE_BIOMETRIC"]
+         "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "POST_NOTIFICATIONS", "VIBRATE", "USE_BIOMETRIC", "NFC"]
 block = "\n".join(f'    <uses-permission android:name="android.permission.{p}"/>' for p in perms if f'permission.{p}"' not in m)
-m = m.replace("<application", block + "\n    <application", 1)
+m = m.replace("<application", block + '\n    <uses-feature android:name="android.hardware.nfc" android:required="false"/>\n    <application', 1)
 m = re.sub(r'android:label="[^"]*"', 'android:label="ONE ORT"', m, count=1)
 manifest.write_text(m)
 

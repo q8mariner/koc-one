@@ -17,6 +17,14 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   shared_preferences: ^2.3.2
   image_picker: ^1.1.2
+  logging: ^1.3.0
+  # NFC: every tag type (MIFARE Classic/Ultralight/DESFire/Plus, ISO 14443-4, FeliCa, ISO 15693)
+  flutter_nfc_kit: ^3.6.0-rc.6
+  # e-passports (ICAO 9303): BAC session + EF.DG1 (MRZ) — pinned to a reviewed commit
+  dmrtd:
+    git:
+      url: https://github.com/ZeroPass/dmrtd.git
+      ref: 3b6c091843573b275ae68a87335e1872f8b60ea0
 
 flutter:
   uses-material-design: true

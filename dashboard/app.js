@@ -101,6 +101,9 @@ createApp({
       losses: [], clr: null, lossFilter: "all",
       // PM posts
       posts: [], postForm: null, postKind: "all",
+      // employee cards (NFC / passport / QR) and identification
+      cards: [], idv: null, rd: { on: false, nfc: null, busy: false, msg: "", unknown: null, linkTo: "" }, wedge: "",
+      link: null, qrShow: null, scan: null,
       // settings / app
       app: IN_APP, nat: { bio: false, bioSaved: null, bioEnabled: false, perms: {} },
       st: { cur: "", n1: "", n2: "", msg: "", ok: false, busy: false, bioOpen: false, bioPass: "", bioMsg: "", bioBusy: false },
@@ -188,10 +191,14 @@ createApp({
       await loadAll();
       subscribe();
       await nextTick(); initMap();
+      // opened from a scanned employee QR (…/?emp=TOKEN)
+      const emp = new URLSearchParams(location.search).get("emp");
+      if (emp) { history.replaceState(null, "", location.pathname + (IN_APP ? "?app=1" : "")); identify({ kind: "qr", value: emp }); }
+      if (IN_APP) native("nfcStatus").then((r) => { s.rd.nfc = r && r.status; });
     }
 
     async function loadAll() {
-      const [a, b, c, d, e, f, g, k, sl, po] = await Promise.all([
+      const [a, b, c, d, e, f, g, k, sl, po, ec] = await Promise.all([
         sb.from("sectors").select("*").order("created_at"),
         sb.from("zones").select("*").order("created_at"),
         sb.from("buildings").select("*").order("created_at"),
@@ -202,10 +209,11 @@ createApp({
         sb.from("org_private_key").select("*").maybeSingle(),
         sb.from("signal_losses").select("*").order("detected_at", { ascending: false }).limit(300),
         sb.from("posts").select("*").order("pinned", { ascending: false }).order("created_at", { ascending: false }).limit(200),
+        sb.from("employee_cards").select("*").order("created_at"),
       ]);
       s.sectors = a.data || []; s.zones = b.data || []; s.buildings = c.data || []; s.people = d.data || [];
       s.alarms = e.data || []; s.acks = f.data || []; s.reports = g.data || [];
-      s.keyRow = k.data; s.hasKey = !!k.data; s.losses = sl.data || []; s.posts = po.data || [];
+      s.keyRow = k.data; s.hasKey = !!k.data; s.losses = sl.data || []; s.posts = po.data || []; s.cards = ec.data || [];
       if (!s.selInc) { const act = incidents.value.find((x) => x.active); if (act) s.selInc = act.key; }
       loadAvatars();
     }
@@ -734,6 +742,173 @@ createApp({
     const ptitle = (p) => (s.lang === "en" && p.title_en ? p.title_en : p.title);
     const pbody = (p) => (s.lang === "en" && p.body_en ? p.body_en : p.body);
 
+    // ───── Employee cards: NFC (any type), e-passports, QR ─────
+    const CARD_KIND = { nfc: { ar: "بطاقة NFC", en: "NFC card" }, passport: { ar: "جواز سفر", en: "Passport" }, qr: { ar: "رمز QR", en: "QR code" } };
+    const cardsOf = (uid) => s.cards.filter((x) => x.user_id === uid);
+    const hex = (str) => String(str || "").replace(/[^0-9a-f]/gi, "").toUpperCase();
+    const revBytes = (h) => (h.match(/../g) || []).reverse().join("");
+    // A UID can arrive as hex ("04:A2:…", from phones) or as decimal (USB readers in keyboard mode, either byte order).
+    function uidVariants(raw) {
+      const out = new Set(); const t = String(raw || "").trim(); if (!t) return out;
+      const h = hex(t); if (h && /[0-9a-f]/i.test(t)) { out.add(h); out.add(revBytes(h)); }
+      if (/^\d+$/.test(t)) { try { let d = BigInt(t).toString(16).toUpperCase(); if (d.length % 2) d = "0" + d; out.add(d); out.add(revBytes(d)); } catch (_) {} }
+      return out;
+    }
+    const docNo = (v) => String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const qrToken = (text) => { const m = String(text || "").match(/[?&#]emp=([\w-]+)/); return m ? m[1] : String(text || "").trim(); };
+    const passportKeys = () => s.cards.filter((x) => x.kind === "passport" && x.meta && x.meta.dob && x.meta.exp).map((x) => ({ doc: x.value, dob: x.meta.dob, exp: x.meta.exp }));
+
+    function findCard(read) {
+      if (read.kind === "passport") return s.cards.find((x) => x.kind === "passport" && docNo(x.value) === docNo(read.value));
+      if (read.kind === "qr") { const t = qrToken(read.value); return s.cards.find((x) => x.kind === "qr" && (x.value === t || x.value === String(read.value).trim())); }
+      const want = uidVariants(read.value);
+      return s.cards.find((x) => x.kind === "nfc" && [...uidVariants(x.value)].some((v) => want.has(v)));
+    }
+    function showId(p, card) { s.idv = { p, card }; s.rd.unknown = null; }
+    async function identify(read) {
+      // a card written with our QR link (NDEF) identifies like the QR
+      if (read.kind === "nfc" && read.ndef) { const t = (read.ndef || []).map(qrToken).find((x) => s.cards.some((c) => c.kind === "qr" && c.value === x)); if (t) read = { kind: "qr", value: t }; }
+      const card = findCard(read);
+      const p = card && byId(s.people, card.user_id);
+      if (p) { beep(); return showId(p, card); }
+      if (read.kind === "qr") { // the live QR on the employee's digital ID (signed, 30 s)
+        const { data } = await sb.functions.invoke("id-token", { body: { verify: String(read.value).trim() } }).catch(() => ({}));
+        if (data && data.valid) { const q = byId(s.people, data.profile.id) || data.profile; beep(); return showId(q, { kind: "qr", tech: tr("الهوية الرقمية في تطبيق ONE", "Digital ID in the ONE app") }); }
+      }
+      s.rd.unknown = read; s.rd.linkTo = "";
+      toast(tr("البطاقة غير مرتبطة بأي موظف — يمكنك ربطها الآن", "This card isn’t linked to anyone — you can link it now"));
+    }
+    async function saveCard(uid, row) {
+      const { data, error } = await sb.from("employee_cards").insert({ user_id: uid, created_by: s.me.id, ...row }).select().single();
+      if (error) { toast(error.code === "23505" ? tr("هذه البطاقة مرتبطة بموظف آخر", "This card is already linked to another employee") : tr("تعذّر الربط: ", "Couldn’t link: ") + error.message); return null; }
+      s.cards.push(data); toast(tr("رُبطت ", "Linked ") + lt(CARD_KIND[data.kind]) + tr(" بـ ", " to ") + name("employee", uid)); return data;
+    }
+    async function deleteCard(cd) {
+      if (!confirm(tr("إلغاء ربط هذه البطاقة؟", "Unlink this card?"))) return;
+      const { error } = await sb.from("employee_cards").delete().eq("id", cd.id);
+      if (error) return toast(error.message);
+      s.cards = s.cards.filter((x) => x.id !== cd.id);
+    }
+    function readToRow(read) {
+      if (read.kind === "passport") return { kind: "passport", value: docNo(read.value), tech: "e-Passport (ICAO 9303)", label: read.name || null, meta: { dob: read.dob, exp: read.exp, name: read.name || null, nationality: read.nationality || null } };
+      if (read.kind === "qr") return { kind: "qr", value: qrToken(read.value), tech: "QR" };
+      const t = String(read.value).trim(); // decimal stays as typed by a USB reader; hex is normalised
+      return { kind: "nfc", value: /^\d+$/.test(t) ? t : hex(t), tech: read.tech || tr("قارئ USB", "USB reader") };
+    }
+    async function linkUnknown() { const u = s.rd.unknown; if (!u || !s.rd.linkTo) return; const d = await saveCard(s.rd.linkTo, readToRow(u)); if (d) showId(byId(s.people, d.user_id), d); }
+
+    // ── reading: phone NFC (ONE ORT app), Web NFC (Chrome on Android), USB reader (types the UID + Enter) ──
+    function nfcResultToRead(r) {
+      if (r.passport) return { kind: "passport", value: r.passport.doc, name: [r.passport.first, r.passport.last].filter(Boolean).join(" "), nationality: r.passport.nationality, dob: r.passport.dob, exp: r.passport.exp };
+      return { kind: "nfc", value: r.uid, tech: r.tech, ndef: r.ndef || [] };
+    }
+    async function nfcOnce(passports) {
+      if (IN_APP) {
+        const r = await native("nfcRead", { passports: passports || passportKeys() });
+        if (!r || r.timeout) return null;
+        if (r.error) { s.rd.msg = r.error; return null; }
+        if (r.randomUid && !r.passport) s.rd.msg = tr("هذه شريحة برقم عشوائي (جواز سفر أو بطاقة بنكية) — رقمها يتغير في كل قراءة. اربط الجوازات من «＋ جواز سفر» في ملف الموظف.", "This chip has a random number (passport or bank card) — it changes on every read. Link passports with “＋ Passport” in the employee’s file.");
+        return nfcResultToRead(r);
+      }
+      if ("NDEFReader" in window) {
+        const reader = new window.NDEFReader(); const ctl = new AbortController();
+        return new Promise((res) => {
+          const done = (v) => { ctl.abort(); res(v); };
+          reader.addEventListener("reading", (e) => done({ kind: "nfc", value: e.serialNumber, tech: "NFC", ndef: [...e.message.records].map((rec) => { try { return new TextDecoder().decode(rec.data); } catch (_) { return ""; } }) }), { once: true });
+          reader.addEventListener("readingerror", () => { s.rd.msg = tr("تعذّرت قراءة البطاقة — هذا المتصفح يقرأ بطاقات NDEF فقط؛ استخدم تطبيق ONE ORT لكل الأنواع.", "Couldn’t read the card — this browser reads NDEF cards only; use the ONE ORT app for every type."); done(null); }, { once: true });
+          reader.scan({ signal: ctl.signal }).catch((e) => { s.rd.msg = e.message; res(null); });
+          setTimeout(() => done(null), 30000);
+        });
+      }
+      s.rd.msg = tr("لا يوجد NFC هنا — استخدم قارئ USB (يكتب رقم البطاقة) أو تطبيق ONE ORT.", "No NFC here — use a USB reader (it types the card number) or the ONE ORT app."); return null;
+    }
+    const passportCount = computed(() => passportKeys().length);
+    const canNfc = computed(() => (IN_APP ? s.rd.nfc === "available" : "NDEFReader" in window));
+    async function readerLoop() {
+      s.rd.on = !s.rd.on; s.rd.msg = "";
+      if (!s.rd.on) { native("nfcCancel"); return; }
+      while (s.rd.on) {
+        if (s.idv || s.rd.unknown) { await new Promise((r) => setTimeout(r, 600)); continue; }
+        s.rd.busy = true; const read = await nfcOnce(); s.rd.busy = false;
+        if (!s.rd.on) break;
+        if (read) await identify(read); else if (!IN_APP) { s.rd.on = false; break; } else await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+    function wedgeSubmit() { const v = s.wedge.trim(); s.wedge = ""; if (v) { const isQr = /emp=|^https?:/i.test(v); identify(isQr ? { kind: "qr", value: v } : { kind: "nfc", value: v, tech: tr("قارئ USB", "USB reader") }); } }
+
+    // ── linking from the employee editor ──
+    function startLink(kind) {
+      s.link = { kind, uid: s.pe.id, busy: false, msg: "", manual: "", doc: "", dob: "", exp: "", verified: null };
+      if (kind === "nfc" && canNfc.value) linkNfc();
+      if (kind === "qrScan") openScanner((text) => linkQrText(text));
+    }
+    async function linkNfc() {
+      const l = s.link; l.busy = true; l.msg = tr("قرّب البطاقة من الهاتف…", "Hold the card to the phone…");
+      const read = await nfcOnce([]); l.busy = false;
+      if (!read) { l.msg = s.rd.msg || tr("لم تُقرأ بطاقة.", "No card read."); return; }
+      if (read.kind !== "nfc") { l.msg = tr("هذا جواز سفر — استخدم «ربط جواز سفر».", "That’s a passport — use “Link passport”."); return; }
+      if (await saveCard(l.uid, readToRow(read))) s.link = null;
+    }
+    async function linkManual() { const l = s.link; const v = l.manual.trim(); if (!v) return; if (await saveCard(l.uid, readToRow({ kind: "nfc", value: v, tech: tr("قارئ USB", "USB reader") }))) s.link = null; }
+    async function verifyPassportChip() {
+      const l = s.link; if (!l.doc || !l.dob || !l.exp) return (l.msg = tr("أدخل رقم الجواز وتاريخ الميلاد وتاريخ الانتهاء.", "Enter the passport number, date of birth and expiry."));
+      l.busy = true; l.msg = tr("ضع الجواز على ظهر الهاتف (صفحة البيانات) وانتظر…", "Place the passport on the back of the phone (data page) and wait…");
+      const read = await nfcOnce([{ doc: docNo(l.doc), dob: l.dob, exp: l.exp }]); l.busy = false;
+      if (read && read.kind === "passport") { l.verified = read; l.msg = "✓ " + tr("قُرئت الشريحة: ", "Chip read: ") + (read.name || "") + " · " + read.value; }
+      else l.msg = s.rd.msg || tr("تعذّرت قراءة الشريحة — تحقق من البيانات وثبات الجواز.", "Couldn’t read the chip — check the details and hold the passport still.");
+    }
+    async function linkPassport() {
+      const l = s.link; if (!l.doc || !l.dob || !l.exp) return (l.msg = tr("أدخل رقم الجواز وتاريخ الميلاد وتاريخ الانتهاء.", "Enter the passport number, date of birth and expiry."));
+      const v = l.verified || {};
+      if (await saveCard(l.uid, readToRow({ kind: "passport", value: l.doc, dob: l.dob, exp: l.exp, name: v.name, nationality: v.nationality }))) s.link = null;
+    }
+    async function linkQrNew() {
+      const t = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+      const d = await saveCard(s.pe.id, { kind: "qr", value: t, tech: "QR · ONE" });
+      if (d) showQr(d);
+    }
+    async function linkQrText(text) { if (await saveCard(s.link ? s.link.uid : s.pe.id, readToRow({ kind: "qr", value: text }))) s.link = null; }
+
+    // ── QR: draw / download / scan ──
+    const qrUrl = (token) => location.origin + location.pathname + "?emp=" + token;
+    function showQr(cd) { const p = byId(s.people, cd.user_id); s.qrShow = { card: cd, p, url: qrUrl(cd.value) }; nextTick(drawQr); }
+    function drawQr() {
+      const q = s.qrShow; const cv = document.getElementById("qr-canvas"); if (!q || !cv || !window.qrcode) return;
+      const code = window.qrcode(0, "M"); code.addData(q.url); code.make();
+      const n = code.getModuleCount(), cell = 8, pad = 32, w = n * cell + pad * 2, h = w + 96;
+      cv.width = w; cv.height = h; const g = cv.getContext("2d");
+      g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
+      g.fillStyle = "#1E2A44"; for (let r = 0; r < n; r++) for (let c2 = 0; c2 < n; c2++) if (code.isDark(r, c2)) g.fillRect(pad + c2 * cell, pad + r * cell, cell, cell);
+      g.fillStyle = "#2B4C9B"; g.fillRect(0, w, w, 96); g.fillStyle = "#F5C518"; g.fillRect(0, w, 10, 96);
+      g.fillStyle = "#fff"; g.textAlign = "center"; g.font = "700 22px 'Readex Pro', sans-serif"; g.fillText(q.p ? q.p.full_name : "", w / 2, w + 40);
+      g.font = "500 16px 'Readex Pro', sans-serif"; g.fillText((q.p && q.p.employee_no ? q.p.employee_no + " · " : "") + "/ONE", w / 2, w + 70);
+    }
+    function downloadQr() { const cv = document.getElementById("qr-canvas"); if (!cv) return; const a = document.createElement("a"); a.href = cv.toDataURL("image/png"); a.download = "ONE-QR-" + (s.qrShow.p ? (s.qrShow.p.employee_no || s.qrShow.p.full_name) : "employee") + ".png"; a.click(); }
+    let scanStream = null, scanCb = null;
+    function loadScript(src) { return new Promise((res, rej) => { const el = document.createElement("script"); el.src = src; el.onload = res; el.onerror = rej; document.head.appendChild(el); }); }
+    async function openScanner(cb) {
+      scanCb = cb || ((text) => identify({ kind: "qr", value: text }));
+      s.scan = { msg: tr("وجّه الكاميرا إلى رمز QR", "Point the camera at a QR code") };
+      try {
+        scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        await nextTick(); const v = document.getElementById("scan-video"); v.srcObject = scanStream; await v.play();
+        const det = "BarcodeDetector" in window ? new window.BarcodeDetector({ formats: ["qr_code"] }) : null;
+        if (!det && !window.jsQR) await loadScript("https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js");
+        const cv = document.createElement("canvas"), g = cv.getContext("2d", { willReadFrequently: true });
+        const tick = async () => {
+          if (!s.scan || !scanStream) return;
+          let text = null;
+          try {
+            if (det) { const r = await det.detect(v); if (r.length) text = r[0].rawValue; }
+            else if (v.videoWidth) { cv.width = v.videoWidth; cv.height = v.videoHeight; g.drawImage(v, 0, 0); const r = window.jsQR(g.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height); if (r) text = r.data; }
+          } catch (_) {}
+          if (text) { const f = scanCb; closeScanner(); f(text); } else setTimeout(tick, 200);
+        };
+        tick();
+      } catch (e) { s.scan.msg = tr("تعذّر فتح الكاميرا: ", "Couldn’t open the camera: ") + (e.message || e); }
+    }
+    function closeScanner() { if (scanStream) scanStream.getTracks().forEach((t) => t.stop()); scanStream = null; s.scan = null; }
+
     // ───── KPIs ─────
     const kpi = computed(() => ({
       online: staff.value.filter((p) => p.online).length,
@@ -770,6 +945,7 @@ createApp({
       callPerson, hangup, toggleMute,
       setupKeys, unlockKey, openReport, setReportStatus,
       // signal losses
+      CARD_KIND, cardsOf, passportCount, identify, deleteCard, linkUnknown, readerLoop, wedgeSubmit, canNfc, startLink, linkNfc, linkManual, verifyPassportChip, linkPassport, linkQrNew, showQr, downloadQr, openScanner, closeScanner,
       POST_KINDS, postsShown, newPost, editPost, savePost, deletePost, ptitle, pbody,
       openLossOf, hiddenLossOf, openLosses, lossLog, lossReason, lossArea, lossState, lossAlarm, dur, focusLoss, askClear, saveClear,
     };

@@ -285,6 +285,34 @@
           <h2 class="sec">{{ tr('الموظفون', 'Employees') }}</h2>
           <button class="btn sm primary" @click="newPerson">+ {{ tr('حساب موظف', 'Employee account') }}</button>
         </div>
+
+        <!-- card reader: tap / place a card, passport or QR → the employee's ID -->
+        <div class="reader" :class="{on: s.rd.on}">
+          <div class="reader-h">
+            <span class="reader-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM8 12h.01M11 9a4 4 0 0 1 0 6M14 7a7 7 0 0 1 0 10"/></svg></span>
+            <div class="grow min0"><b>{{ tr('قارئ البطاقات', 'Card reader') }}</b>
+              <small class="muted d">{{ tr('بطاقات NFC بكل أنواعها، والجوازات الإلكترونية، ورموز QR — تظهر هوية الموظف فورًا', 'NFC cards of every type, e-passports and QR codes — shows the employee’s ID at once') }}</small></div>
+          </div>
+          <div class="reader-actions">
+            <button v-if="canNfc" class="btn sm" :class="s.rd.on ? 'danger' : 'primary'" @click="readerLoop">
+              {{ s.rd.on ? tr('إيقاف القارئ', 'Stop reader') : tr('تشغيل قارئ NFC', 'Start NFC reader') }}</button>
+            <button class="btn sm" @click="openScanner()">▣ {{ tr('مسح QR', 'Scan QR') }}</button>
+            <form class="wedge" @submit.prevent="wedgeSubmit">
+              <input v-model="s.wedge" dir="ltr" autocomplete="off" :placeholder="tr('قارئ USB: ضع البطاقة هنا', 'USB reader: tap a card here')" :aria-label="tr('رقم البطاقة من قارئ USB', 'Card number from a USB reader')">
+            </form>
+          </div>
+          <p v-if="s.rd.on" class="reader-live"><i></i>{{ tr('القارئ يعمل — قرّب البطاقة أو الجواز من ظهر الهاتف', 'Reader on — hold a card or passport to the back of the phone') }}<template v-if="passportCount"> · {{ passportCount }} {{ tr('جواز مسجّل', 'passports enrolled') }}</template></p>
+          <p v-if="s.rd.msg" class="muted">{{ s.rd.msg }}</p>
+          <div v-if="s.rd.unknown" class="unknown">
+            <b>{{ tr('بطاقة غير مرتبطة', 'Card not linked') }}</b>
+            <span class="muted" dir="ltr">{{ L(CARD_KIND[s.rd.unknown.kind]) }} · {{ s.rd.unknown.value }}<template v-if="s.rd.unknown.name"> · {{ s.rd.unknown.name }}</template></span>
+            <div class="row gap8 wrap">
+              <select v-model="s.rd.linkTo" :aria-label="tr('الموظف', 'Employee')"><option value="">{{ tr('اختر موظفًا لربطها به…', 'Choose an employee to link it to…') }}</option><option v-for="p in staff" :key="p.id" :value="p.id">{{ p.full_name }} · {{ p.employee_no }}</option></select>
+              <button class="btn sm primary" :disabled="!s.rd.linkTo" @click="linkUnknown">{{ tr('ربط', 'Link') }}</button>
+              <button class="btn sm ghost" @click="s.rd.unknown=null">{{ tr('تجاهل', 'Dismiss') }}</button>
+            </div>
+          </div>
+        </div>
         <form v-if="s.pf" class="editor grid3" @submit.prevent="savePerson">
           <div><label for="pfn">{{ tr('الاسم الكامل', 'Full name') }}</label><input id="pfn" v-model="s.pf.full_name"></div>
           <div><label for="pfe">{{ tr('الرقم الوظيفي', 'Employee no.') }}</label><input id="pfe" v-model="s.pf.employee_no"></div>
@@ -316,6 +344,42 @@
               <div><label class="check"><input type="checkbox" v-model="s.pe.active"> {{ tr('موظف فعّال', 'Active employee') }}</label></div>
             </div>
           </div>
+          <div class="cards-sec">
+            <h4>{{ tr('البطاقات المرتبطة', 'Linked cards') }}</h4>
+            <div class="cardlist">
+              <span v-for="cd in cardsOf(s.pe.id)" :key="cd.id" class="cardchip" :class="'k-' + cd.kind">
+                <b>{{ L(CARD_KIND[cd.kind]) }}</b><span dir="ltr">{{ cd.kind==='qr' ? '…' + cd.value.slice(-6) : cd.value }}</span><small v-if="cd.tech" class="muted">{{ cd.tech }}</small>
+                <button v-if="cd.kind==='qr'" class="linkbtn" @click="showQr(cd)">{{ tr('عرض', 'Show') }}</button>
+                <button class="x" @click="deleteCard(cd)" :aria-label="tr('إلغاء الربط', 'Unlink')">✕</button>
+              </span>
+              <span v-if="!cardsOf(s.pe.id).length" class="muted">{{ tr('لا توجد بطاقات مرتبطة بعد.', 'No cards linked yet.') }}</span>
+            </div>
+            <div class="row gap8 wrap">
+              <button class="btn xs" @click="startLink('nfc')">＋ {{ tr('بطاقة NFC', 'NFC card') }}</button>
+              <button class="btn xs" @click="startLink('passport')">＋ {{ tr('جواز سفر', 'Passport') }}</button>
+              <button class="btn xs" @click="linkQrNew">＋ {{ tr('إنشاء QR', 'New QR') }}</button>
+              <button class="btn xs" @click="startLink('qrScan')">＋ {{ tr('ربط QR موجود', 'Link existing QR') }}</button>
+            </div>
+            <div v-if="s.link && s.link.uid===s.pe.id && s.link.kind!=='qrScan'" class="linkbox">
+              <template v-if="s.link.kind==='nfc'">
+                <p class="muted">{{ canNfc ? tr('قرّب البطاقة من ظهر الهاتف، أو مرّرها على قارئ USB، أو اكتب رقمها:', 'Hold the card to the phone, tap it on a USB reader, or type its number:') : tr('مرّر البطاقة على قارئ USB (يكتب رقمها هنا) أو اكتب الرقم:', 'Tap the card on a USB reader (it types the number here) or type it:') }}</p>
+                <form class="row gap8" @submit.prevent="linkManual"><input v-model="s.link.manual" dir="ltr" autofocus :placeholder="tr('رقم البطاقة (UID)', 'Card number (UID)')" class="grow"><button class="btn sm primary">{{ tr('ربط', 'Link') }}</button>
+                  <button v-if="canNfc" type="button" class="btn sm" :disabled="s.link.busy" @click="linkNfc">{{ tr('قراءة بالهاتف', 'Read with phone') }}</button></form>
+              </template>
+              <template v-else-if="s.link.kind==='passport'">
+                <p class="muted">{{ tr('من صفحة بيانات الجواز. هذه البيانات هي مفتاح قراءة الشريحة (الجوازات تعطي رقمًا عشوائيًا في كل قراءة، لذلك لا تُعرَّف برقم الشريحة).', 'From the passport data page. These details are the key to read the chip (passports give a random chip number on every read, so they can’t be identified by it).') }}</p>
+                <div class="grid3">
+                  <div><label for="ppn">{{ tr('رقم الجواز', 'Passport no.') }}</label><input id="ppn" v-model="s.link.doc" dir="ltr"></div>
+                  <div><label for="ppb">{{ tr('تاريخ الميلاد', 'Date of birth') }}</label><input id="ppb" type="date" v-model="s.link.dob"></div>
+                  <div><label for="ppe">{{ tr('تاريخ الانتهاء', 'Expiry date') }}</label><input id="ppe" type="date" v-model="s.link.exp"></div>
+                </div>
+                <div class="row gap8 wrap"><button class="btn sm primary" @click="linkPassport">{{ tr('ربط الجواز', 'Link passport') }}</button>
+                  <button v-if="s.app && canNfc" class="btn sm" :disabled="s.link.busy" @click="verifyPassportChip">{{ tr('قراءة الشريحة للتأكد', 'Read the chip to check') }}</button></div>
+              </template>
+              <p v-if="s.link.msg" class="muted">{{ s.link.msg }}</p>
+              <button class="linkbtn" @click="s.link=null">{{ tr('إلغاء', 'Cancel') }}</button>
+            </div>
+          </div>
           <div class="row gap8 end"><button class="btn sm ghost" @click="s.pe=null">{{ tr('إلغاء', 'Cancel') }}</button><button class="btn sm primary" @click="savePersonEdit">{{ tr('حفظ الهوية', 'Save ID') }}</button></div>
         </div>
 
@@ -328,7 +392,7 @@
             <label class="chk" v-if="p.role!=='ort'" :aria-label="tr('تحديد', 'Select')"><input type="checkbox" :checked="s.psel.includes(p.id)" @change="togglePsel(p.id)"></label>
             <span class="ava" :style="avatar(p) ? {backgroundImage: 'url(' + avatar(p) + ')'} : {}"><i class="dot" :class="p.online ? 'on' : ''"></i></span>
             <div class="grow min0">
-              <strong>{{ p.full_name }} <span v-if="p.role==='ort'" class="chip">ORT</span><span v-if="p.active===false" class="chip warn">{{ tr('موقوف', 'Inactive') }}</span></strong>
+              <strong>{{ p.full_name }} <span v-if="p.role==='ort'" class="chip">ORT</span><span v-if="cardsOf(p.id).length" class="chip">💳 {{ cardsOf(p.id).length }}</span><span v-if="p.active===false" class="chip warn">{{ tr('موقوف', 'Inactive') }}</span></strong>
               <small class="muted d">{{ p.employee_no }}<template v-if="p.job_title"> · {{ p.job_title }}</template> · {{ tr('دم', 'Blood') }} {{ p.blood_type || '—' }} · <span dir="ltr">{{ p.phone }}</span></small>
               <small class="muted d">{{ where(p) }} · {{ ago(p.last_seen) }}</small>
             </div>
@@ -502,6 +566,56 @@
       </button>
     </nav>
 
+    <!-- employee ID (from a card, passport or QR) -->
+    <div v-if="s.idv" class="modal-bg" @click.self="s.idv=null">
+      <div class="modal idcard-modal" role="dialog" :aria-label="tr('هوية الموظف', 'Employee ID')">
+        <div class="idcard">
+          <div class="idc-top"><span class="tag">{{ tr('هوية الموظف', 'Employee ID') }}</span><button class="icon-btn" @click="s.idv=null" :aria-label="tr('إغلاق', 'Close')">✕</button></div>
+          <div class="idc-main">
+            <span class="idc-photo" :style="avatar(s.idv.p) ? {backgroundImage: 'url(' + avatar(s.idv.p) + ')'} : {}"></span>
+            <div class="min0">
+              <h2>{{ s.idv.p.full_name }}</h2>
+              <p>{{ s.idv.p.job_title || '—' }}<template v-if="s.idv.p.department"> · {{ s.idv.p.department }}</template></p>
+              <span v-if="s.idv.p.active===false" class="chip warn">{{ tr('موقوف', 'Inactive') }}</span>
+            </div>
+          </div>
+          <div class="idc-grid">
+            <div><small>{{ tr('الرقم الوظيفي', 'Employee no.') }}</small><b dir="ltr">{{ s.idv.p.employee_no || '—' }}</b></div>
+            <div><small>{{ tr('فصيلة الدم', 'Blood') }}</small><b>{{ s.idv.p.blood_type || '—' }}</b></div>
+            <div><small>{{ tr('الرقم المدني', 'Civil ID') }}</small><b dir="ltr">{{ s.idv.p.civil_id || '—' }}</b></div>
+            <div><small>{{ tr('الهاتف', 'Phone') }}</small><b dir="ltr">{{ s.idv.p.phone || '—' }}</b></div>
+            <div class="span2"><small>{{ tr('الموقع الآن', 'Location now') }}</small><b>{{ where(s.idv.p) }}</b></div>
+            <div v-if="personStatus(s.idv.p.id)" class="span2"><small>{{ tr('حالته في الإنذار', 'Alarm status') }}</small><span class="st" :class="STATUS[personStatus(s.idv.p.id)][1]">{{ L(STATUS[personStatus(s.idv.p.id)][0]) }}</span></div>
+          </div>
+          <p class="idc-via muted" v-if="s.idv.card">{{ tr('تم التعرف عبر: ', 'Identified by: ') }}{{ L(CARD_KIND[s.idv.card.kind]) }}<template v-if="s.idv.card.tech"> · {{ s.idv.card.tech }}</template></p>
+          <div class="row gap8 wrap">
+            <button class="btn sm primary" @click="callPerson(s.idv.p.id)">☎ {{ tr('اتصال', 'Call') }}</button>
+            <button class="btn sm" @click="s.tab='people'; editPerson(s.idv.p); s.idv=null">{{ tr('فتح الملف', 'Open file') }}</button>
+            <button class="btn sm ghost" @click="s.idv=null">{{ tr('إغلاق', 'Close') }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- employee QR (print / download) -->
+    <div v-if="s.qrShow" class="modal-bg" @click.self="s.qrShow=null">
+      <div class="modal" role="dialog" :aria-label="tr('رمز QR للموظف', 'Employee QR')">
+        <div class="row"><h2 class="sec">{{ tr('رمز QR للموظف', 'Employee QR') }}</h2><button class="icon-btn" @click="s.qrShow=null" :aria-label="tr('إغلاق', 'Close')">✕</button></div>
+        <p class="muted">{{ tr('عند مسحه من تطبيق ONE ORT أو من صفحة الموظفين تظهر هوية الموظف. مسحه بكاميرا أي هاتف يفتح اللوحة ولا يعرض شيئًا إلا لعضو ORT مسجّل الدخول.', 'Scanning it in the ONE ORT app or on the Employees page shows the employee’s ID. A normal phone camera opens the console, which shows nothing unless an ORT member is signed in.') }}</p>
+        <canvas id="qr-canvas" class="qr-canvas"></canvas>
+        <div class="row gap8"><button class="btn sm primary" @click="downloadQr">⬇ {{ tr('تنزيل الصورة', 'Download image') }}</button></div>
+      </div>
+    </div>
+
+    <!-- QR scanner -->
+    <div v-if="s.scan" class="modal-bg" @click.self="closeScanner">
+      <div class="modal scanner" role="dialog" :aria-label="tr('مسح QR', 'Scan QR')">
+        <div class="row"><h2 class="sec">{{ tr('مسح QR', 'Scan QR') }}</h2><button class="icon-btn" @click="closeScanner" :aria-label="tr('إغلاق', 'Close')">✕</button></div>
+        <div class="scan-box"><video id="scan-video" playsinline muted></video><i></i></div>
+        <p class="muted">{{ s.scan.msg }}</p>
+      </div>
+    </div>
+
     <!-- confirm an employee is safe after a signal loss -->
     <div v-if="s.clr" class="modal-bg" @click.self="s.clr=null">
       <div class="modal" role="dialog" :aria-label="tr('تأكيد سلامة الموظف', 'Confirm the employee is safe')">
@@ -566,6 +680,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="config.js"></script>
 <script src="crypto.js"></script>
 <script src="rtc.js"></script>

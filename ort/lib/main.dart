@@ -4,9 +4,13 @@
 // The page talks to it through window.OneNative (see native() in dashboard/app.js).
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:dmrtd/dmrtd.dart';
+import 'package:flutter_nfc_kit/flutter_nfc_kit.dart';
+import 'package:logging/logging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
@@ -249,6 +253,18 @@ class _ConsoleState extends State<Console> with WidgetsBindingObserver {
           await _vault.write(key: 'pass', value: '${a['password']}');
         }
         return {'ok': true};
+      case 'nfcStatus':
+        try {
+          final av = await FlutterNfcKit.nfcAvailability;
+          return {'status': av == NFCAvailability.available ? 'available' : av == NFCAvailability.disabled ? 'disabled' : 'none'};
+        } catch (_) {
+          return {'status': 'none'};
+        }
+      case 'nfcCancel':
+        try { await FlutterNfcKit.finish(); } catch (_) {}
+        return {'ok': true};
+      case 'nfcRead':
+        return await _nfcRead(a);
       case 'notify':
         if (!_foreground) {
           await notes.show(++_noteId, '${a['title']}', '${a['body']}', const NotificationDetails(
@@ -258,6 +274,68 @@ class _ConsoleState extends State<Console> with WidgetsBindingObserver {
         return {'ok': true};
     }
     return null;
+  }
+
+  // ── NFC: one tap → UID + type + NDEF text; for e-passports a BAC session with the enrolled keys → MRZ ──
+  static String _d(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  static String _tech(NFCTag t) {
+    const names = {
+      'mifare_classic': 'MIFARE Classic', 'mifare_ultralight': 'MIFARE Ultralight', 'mifare_desfire': 'MIFARE DESFire',
+      'mifare_plus': 'MIFARE Plus', 'iso7816': 'ISO 14443-4 / 7816', 'iso15693': 'ISO 15693 (NFC-V)', 'iso18092': 'FeliCa (NFC-F)',
+    };
+    return '${names[t.type.name] ?? t.type.name} · ${t.standard}';
+  }
+
+  Future<Map<String, dynamic>> _nfcRead(Map<String, dynamic> a) async {
+    try {
+      final av = await FlutterNfcKit.nfcAvailability;
+      if (av == NFCAvailability.disabled) return {'error': t('NFC مغلق في الهاتف — فعّله من إعدادات الهاتف.', 'NFC is off — turn it on in the phone settings.')};
+      if (av != NFCAvailability.available) return {'error': t('هذا الهاتف لا يدعم NFC.', 'This phone has no NFC.')};
+    } catch (_) {
+      return {'error': t('هذا الهاتف لا يدعم NFC.', 'This phone has no NFC.')};
+    }
+    NFCTag tag;
+    try {
+      tag = await FlutterNfcKit.poll(
+        timeout: const Duration(seconds: 25),
+        readIso14443A: true, readIso14443B: true, readIso18092: true, readIso15693: true,
+        androidCheckNDEF: true, androidPlatformSound: true,
+      );
+    } catch (_) {
+      return {'timeout': true};
+    }
+    final res = <String, dynamic>{'uid': tag.id, 'tech': _tech(tag), 'ndef': <String>[],
+      // ISO 14443 random UIDs start with 08 (passports, many bank cards): the number changes every read
+      'randomUid': tag.id.length == 8 && tag.id.toUpperCase().startsWith('08')};
+    try {
+      if (tag.ndefAvailable == true) {
+        final recs = await FlutterNfcKit.readNDEFRecords(cached: false);
+        res['ndef'] = recs.map((r) {
+          final d = r as dynamic;
+          try { return '${d.text}'; } catch (_) {}
+          try { return '${d.uriString}'; } catch (_) {}
+          return r.toString();
+        }).toList();
+      }
+    } catch (_) {}
+    final keys = (a['passports'] as List?) ?? const [];
+    if (tag.type == NFCTagType.iso7816 && keys.isNotEmpty) {
+      for (final k in keys.take(80)) {
+        try {
+          final pp = Passport(_TagProvider());
+          await pp.startSession(DBAKey('${k['doc']}', DateTime.parse('${k['dob']}'), DateTime.parse('${k['exp']}')));
+          final m = (await pp.readEfDG1()).mrz;
+          res['passport'] = {'doc': m.documentNumber, 'first': m.firstName, 'last': m.lastName, 'nationality': m.nationality, 'dob': _d(m.dateOfBirth), 'exp': _d(m.dateOfExpiry)};
+          res['tech'] = 'e-Passport (ICAO 9303)';
+          break;
+        } catch (_) {
+          // wrong key for this passport → try the next enrolled one
+        }
+      }
+    }
+    try { await FlutterNfcKit.finish(); } catch (_) {}
+    return res;
   }
 
   Future<bool> _back() async {
@@ -386,4 +464,18 @@ class _Lock extends StatelessWidget {
           ),
         ),
       );
+}
+
+
+/// dmrtd talks to the chip through this: the tag is already connected by FlutterNfcKit.poll.
+class _TagProvider extends ComProvider {
+  _TagProvider() : super(Logger('ort.nfc'));
+  @override
+  Future<void> connect() async {}
+  @override
+  Future<void> disconnect() async {}
+  @override
+  bool isConnected() => true;
+  @override
+  Future<Uint8List> transceive(final Uint8List data) => FlutterNfcKit.transceive(data, timeout: const Duration(seconds: 10));
 }
